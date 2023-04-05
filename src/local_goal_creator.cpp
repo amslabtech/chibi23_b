@@ -48,4 +48,39 @@ void LocalGoalCreator::select_local_goal()
 
         if(goal_index_ < global_path_.poses.size())  //global_path_の配列の範囲におさまっていれば
         {
+            local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;
+            local_goal_.point.y = global_path_.poses[goal_index_].pose.position.y;
+        }
+        else  //goalの位置に到着したら
+        {
+            goal_index_ = global_path_.poses.size() -1;
+            local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;
+            local_goal_.point.y = global_path_.poses[goal_index_].pose.position.y;
+        }
+    }
+}
+
+void LocalGoalCreator::process()
+{
+    ros::Rate loop_rate(hz_);
+    while(ros::ok()) {
+        if(is_global_path_checker_ && is_current_pose_checker_)
+        {
+            select_local_goal();
+            local_goal_.header.stamp = ros::Time::now();
+            local_goal_pub_.publish(local_goal_);
+        }
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
+}
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "local_goal_creator");
+    LocalGoalCreator localgoalcreator;
+    localgoalcreator.process();
+
+    return 0;
+}
 
