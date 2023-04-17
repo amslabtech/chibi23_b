@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+
+<launch>
+    <!-- yaml file path-->
+    <arg name="map_file" default="$(find chibi23_b)/map/map.yaml"/>
+    <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)" output="screen"/>
+
+    <!-- node launch-->
+    <node pkg="chibi23_b" type="localizer" name="localizer" output="screen">
+    </node>
+</launch>
