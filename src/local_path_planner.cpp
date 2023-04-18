@@ -44,18 +44,16 @@ void DWA::obstacle_poses_callback(const geometry_msgs::PoseArray::ConstPtr& msg)
 
 bool DWA::can_move()
 {
-        if(!(flag_local_goal_ && flag_ob_poses_)) return false;
+    if(!(flag_local_goal_ && flag_ob_poses_)) return false;
 
+    const double dx = local_goal_.point.x;
+    const double dy = local_goal_.point.y;
+    const double dist_to_goal = hypot(dx, dy);
 
-        const double dx = local_goal_.point.x;
-        const double dy = local_goal_.point.y;
-        const double dist_to_goal = hypot(dx, dy);
-
-
-        if(dist_to_goal > goal_tolerance_)
-            return true;
-        else
-            return false;
+    if(dist_to_goal > goal_tolerance_)
+        return true;
+    else
+        return false;
 }
 
 
@@ -63,19 +61,12 @@ bool DWA::can_move()
 //Dynamic Window計算
 void DWA::calc_dynamic_window()
 {
-        // 車両モデルによるWindow
-    double Vs[] = {min_vel_,
-                   max_vel_,
-                   -max_yawrate_,
-                   max_yawrate_};
+    double Vs[] = {min_vel_,max_vel_,-max_yawrate_,max_yawrate_};
 
-    double Vd[] = {roomba_.velocity - max_accel_*dt_,
-                   roomba_.velocity + max_accel_*dt_,
-                   roomba_.yawrate  - max_dyawrate_*dt_,
-                   roomba_.yawrate  + max_dyawrate_*dt_};
+    double Vd[] = {roomba_.velocity - max_accel_*dt_,roomba_.velocity + max_accel_*dt_,roomba_.yawrate  - max_dyawrate_*dt_,roomba_.yawrate  + max_dyawrate_*dt_};
 
-    dw_.min_vel     = std::max(Vs[0], Vd[0]);
-    dw_.max_vel     = std::min(Vs[1], Vd[1]);
+    dw_.min_vel = std::max(Vs[0], Vd[0]);
+    dw_.max_vel = std::min(Vs[1], Vd[1]);
     dw_.min_yawrate = std::max(Vs[2], Vd[2]);
     dw_.max_yawrate = std::min(Vs[3], Vd[3]);
 }
@@ -119,15 +110,15 @@ double DWA::calc_dist_score(const std::vector<State>& trajectory)
     {
         for(const auto& ob_pose : ob_poses_.poses)
         {
-            const double dx   = ob_pose.position.x - state.x;
-            const double dy   = ob_pose.position.y - state.y;
+            const double dx = ob_pose.position.x - state.x;
+            const double dy = ob_pose.position.y - state.y;
             const double dist = hypot(dx, dy);
 
             if(dist <= roomba_radius_+radius_margin_)
-                                return -1e6;
+                return -1e6;
 
             if(dist < min_dist)
-                                min_dist = dist;
+                min_dist = dist;
         }
     }
     return min_dist/search_range_;
@@ -159,7 +150,6 @@ std::vector<double> DWA::calc_input()
     std::vector<double> input{0.0, 0.0};
     std::vector<std::vector<State>> trajectories;
 
-
     calc_dynamic_window();
 
     double max_score = -1000.0;
@@ -171,7 +161,7 @@ std::vector<double> DWA::calc_input()
     {
         for(double yawrate=dw_.min_yawrate; yawrate<=dw_.max_yawrate; yawrate+=yawrate_reso_)
         {
-            std::vector<State> trajectory = calc_trajectory(velocity, yawrate); // 予測軌跡の生成
+            std::vector<State> trajectory = calc_trajectory(velocity, yawrate);
 
             const double score = calc_evaluation(trajectory);
             trajectories.push_back(trajectory);
@@ -179,8 +169,8 @@ std::vector<double> DWA::calc_input()
             if(max_score < score)
             {
                 max_score = score;
-                input[0]  = velocity;
-                input[1]  = yawrate;
+                input[0] = velocity;
+                input[1] = yawrate;
                 max_score_index = i;
             }
             i++;
@@ -214,30 +204,29 @@ std::vector<State> DWA::calc_trajectory(const double velocity, const double yawr
 
     for(double t=0.0; t<=predict_time_; t+=dt_)
     {
-        move(state, velocity, yawrate);
+        virtual_rb(state, velocity, yawrate);
         trajectory.push_back(state);
     }
 
     return trajectory;
 }
 
-void DWA::move(State& state, const double velocity, const double yawrate)
+void DWA::virtual_rb(State& state, const double velocity, const double yawrate)
 {
-    state.yaw      += yawrate * dt_;
-    state.yaw       = regulate_angle(state.yaw);
-    state.x        += velocity * cos(state.yaw) * dt_;
-    state.y        += velocity * sin(state.yaw) * dt_;
-    state.velocity  = velocity;
-    state.yawrate   = yawrate;
+    state.yaw += yawrate * dt_;
+    state.yaw = regulate_angle(state.yaw);
+    state.x += velocity * cos(state.yaw) * dt_;
+    state.y += velocity * sin(state.yaw) * dt_;
+    state.velocity = velocity;
+    state.yawrate = yawrate;
 }
 
 void DWA::roomba_control(double velocity, double yawrate)
 {
-        cmd_velocity_.mode = 11;  //mode11:速度と角速度を設定
-        cmd_velocity_.cntl.linear.x = velocity;
-        cmd_velocity_.cntl.angular.z = yawrate;
-
-        pub_cmd_vel_.publish(cmd_velocity_);
+    cmd_velocity_.mode = 11;  //mode11:速度と角速度を設定
+    cmd_velocity_.cntl.linear.x = velocity;
+    cmd_velocity_.cntl.angular.z = yawrate;
+    pub_cmd_vel_.publish(cmd_velocity_);
 }
 
 void DWA::visualize_traj(const std::vector<State>& trajectory, const ros::Publisher& pub_local_path, ros::Time now)
@@ -262,7 +251,7 @@ void DWA::visualize_traj(const std::vector<State>& trajectory, const ros::Publis
 
 void DWA::process()
 {
-    ros::Rate loop_rate(hz_); // 制御周波数の設定
+    ros::Rate loop_rate(hz_);
     tf2_ros::TransformListener tf_listener(tf_buffer_);
 
     while(ros::ok())
@@ -276,18 +265,16 @@ void DWA::process()
         {
             roomba_control(0.0, 0.0);
         }
-        ros::spinOnce();   // コールバック関数の実行
-        loop_rate.sleep(); // 周期が終わるまで待つ
+        ros::spinOnce();
+        loop_rate.sleep();
     }
 }
 
 int main(int argc, char* argv[])
 {
-    ros::init(argc, argv, "local_path_planner"); // ノードの初期化
+    ros::init(argc, argv, "local_path_planner");
     DWA dwa;
-    dwa.process();
 
+    dwa.process();
     return 0;
 }
-
-

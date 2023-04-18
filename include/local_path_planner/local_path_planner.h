@@ -42,7 +42,7 @@ private:
     void local_goal_callback(const geometry_msgs::PointStamped::ConstPtr &msg);
     void obstacle_poses_callback(const geometry_msgs::PoseArray::ConstPtr &msg);
 
-    void   move(State& state, const double velocity, const double yawrate);
+    void   virtual_rb(State& state, const double velocity, const double yawrate);
     double regulate_angle(double angle);
     void   visualize_traj(const std::vector<State>& trajectory, const ros::Publisher& pub_local_path, ros::Time now);
     double calc_evaluation(const std::vector<State> &trajectory);
