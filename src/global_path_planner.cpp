@@ -3,15 +3,18 @@
 Astar::Astar():private_nh_("~")
 {
     private_nh_.param("hz", hz_, {10});
-    private_nh_.param("map_checker", map_checker_, {false});
-    private_nh_.param("test_show_", map_checker_, {true});
+    private_nh_.param("map_checker_", map_checker_, {false});
+    private_nh_.param("test_show_", test_show_, {true});
 //    private_nh_.param("path_checker", path_checker_, {false});
 //    private_nh_.param("is_reached", is_reached_, {false});
 //    private_nh_.param("wall_cost", wall_cost_, {1e10});
 
     global_path_.header.frame_id  = "map";
     current_node_.header.frame_id = "map";
-    sub_map_ = nh_.subscribe("/map", 10, &Astar::map_callback, this);
+
+    global_path_.poses.reserve(2000);
+
+    sub_map_ = nh_.subscribe("/map", 1, &Astar::map_callback, this);
     pub_path_ = nh_.advertise<nav_msgs::Path>("/global_path", 1);
     if(test_show_)
     {
@@ -23,17 +26,17 @@ Astar::Astar():private_nh_("~")
 
 void Astar::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg)  //マップの読み込み
 {
+    // ROS_INFO("map_callback was started...");
     map_ = *msg;
     height_ = map_.info.height;
     width_ = map_.info.width;
     resolution_ = map_.info.resolution;
-
     map_checker_ = true;
-    ROS_INFO("wassyoi");
 }
 
 void Astar::get_way_points(std::vector<std::vector<double>>& list)  //経由点の宣言
 {
+    // ROS_INFO("getting waypoints started...");
     double x0,y0,x1,y1,x2,y2,x3,y3,x4,y4,x5,y5;
     x0 = x5 = y0 = y5 = 0.0;
     x1 = 13.0;
@@ -41,7 +44,7 @@ void Astar::get_way_points(std::vector<std::vector<double>>& list)  //経由点�
     x2 = 14.5;
     y2 = 13.4;
     x3 = -20.0;
-    y3 = 15.0;
+    y3 = 14.00;
     x4 = -20.0;
     y4 = 1.00;
 
@@ -57,6 +60,7 @@ void Astar::get_way_points(std::vector<std::vector<double>>& list)  //経由点�
 
 Node Astar::set_way_point(const int phase)  //スタートとゴールの取得
 {
+    // ROS_INFO("setting waypoint started...");
     get_way_points(way_points_);
     Node way_point;
     way_point.x = way_points_[phase][0];
@@ -66,6 +70,7 @@ Node Astar::set_way_point(const int phase)  //スタートとゴールの取得
 
 double Astar::make_heuristic(const Node node)  //ヒューリスティック関数の計算
 {
+    // ROS_INFO("making heuristic started...");
     const double dx = (node.x - goal_node_.x);
     const double dy = (node.y - goal_node_.y);
     const double distance = hypot(dx,dy);
@@ -75,6 +80,7 @@ double Astar::make_heuristic(const Node node)  //ヒューリスティック関�
 
 bool Astar::check_same_node(const Node n1, const Node n2)  //同じノードか確認
 {
+    // ROS_INFO("checking same node started...");
     if(n1.x == n2.x and n1.y == n2.y)
         return true;
     else
@@ -91,16 +97,18 @@ int Astar::check_list(const Node target_node, std::vector<Node>& set)  //リス�
 
 bool Astar::check_obs(const Node node)  //壁の確認
 {
-    const int grid_index = node.x + (node.y * width_);
+    const int grid_index = (node.x - map_.info.origin.position.x) + ((node.y - map_.info.origin.position.y) * width_);
+    // std::cout << "grid_date =" << map_.data[grid_index] << std::endl;
     return map_.data[grid_index] == 100;
 }
 
 void Astar::swap_node(const Node node, std::vector<Node>& list1, std::vector<Node>& list2)  //リスト間のノードの移動
 {
+    // ROS_INFO("swaping node started...");
     const int list1_node_index = check_list(node,list1);
     if(list1_node_index == -1)
     {
-        ROS_INFO("orannde");
+        ROS_INFO("swap node was faird");
         exit(0);
     }
 
@@ -129,6 +137,7 @@ void Astar::show_path(nav_msgs::Path& current_path)  //パスの表示
 
 Node Astar::select_min_f()  //f値が小さいものを取得
 {
+    // ROS_INFO("selecting min_f...");
     Node min_node = open_list_[0];
     double min_f = open_list_[0].f;
 
@@ -140,7 +149,6 @@ Node Astar::select_min_f()  //f値が小さいものを取得
             min_node = open_node;
         }
     }
-
     return min_node;
 }
 
@@ -156,18 +164,29 @@ bool Astar::check_start(const Node node)  //あんたスタート？
 
 void Astar::update_list(const Node node)  //リストの更新
 {
+    // ROS_INFO("updating list started...");
     std::vector<Node> neighbors;
+    int count = 1;
 
     create_neighbors(node, neighbors);
 
     for(const auto& neighbor : neighbors)
     {
+        // std::cout << "neighbor" << count << "(" << neighbor.x << "," << neighbor.y << ")" << std::endl;
+
         if(check_obs(neighbor))
+        {
+            ROS_INFO("there is obs");
             continue;
+        }
+
+        // std::cout << "check obs was comp..." << std::endl;
 
         int flag;
         int node_index;
         std::tie(flag, node_index) = search_node(neighbor);
+
+        // std::cout << "flag = " << flag << ",node_index =" << node_index << "count =" << count << std::endl;
 
         if(flag == -1)
         {
@@ -191,11 +210,14 @@ void Astar::update_list(const Node node)  //リストの更新
                 open_list_.push_back(neighbor);
             }
         }
+        count++;
     }
+    // ROS_INFO("searching node ended...");
 }
 
 void Astar::create_neighbors(const Node node, std::vector<Node>&  neighbors)  //隣接ノードの作成
 {
+    // ROS_INFO("creating neighbors started...");
     std::vector<Motion> motion_list;
     get_motion(motion_list);
     const int motion_num = motion_list.size();
@@ -203,12 +225,14 @@ void Astar::create_neighbors(const Node node, std::vector<Node>&  neighbors)  //
     for(int i=0;i<motion_num;i++)
     {
         Node neighbor = get_neighbor(node, motion_list[i]);
+        // std::cout << "neighbor" << i + 1 << "= (" << neighbor.x << "," << neighbor.y << ")" << std::endl;
         neighbors.push_back(neighbor);
     }
 }
 
 void Astar::get_motion(std::vector<Motion>& list)  //動きの取得
 {
+    // ROS_INFO("getting motion started...");
     list.push_back(motion(1,0,1));
     list.push_back(motion(0,1,1));
     list.push_back(motion(-1,0,1));
@@ -242,35 +266,53 @@ Node Astar::get_neighbor(const Node node, const Motion motion)  //隣接ノー�
 
 std::tuple<int, int> Astar::search_node(const Node node)  //どこのリストに入っているかの検索
 {
+    // ROS_INFO("searching node started...");
     const int open_list_index = search_node_from_list(node,open_list_);
-    if(open_list_index != 1)
+    if(open_list_index != -1)
+    {
+        // ROS_INFO("found in open");
         return std::make_tuple(1,open_list_index);
+    }
 
     const int close_list_index = search_node_from_list(node,close_list_);
-    if(close_list_index != 1)
+    if(close_list_index != -1)
+    {
+        // ROS_INFO("found in close");
         return std::make_tuple(2,close_list_index);
-
-        return std::make_tuple(-1,-1);
+    }
+    // ROS_INFO("there is no node in list");
+    return std::make_tuple(-1,-1);
 }
 
 void Astar::create_path(Node node)  //パスの作成
 {
+    ROS_INFO("making path...");
     nav_msgs::Path partial_path;
     partial_path.poses.push_back(node_to_pose(node));
+    // ROS_INFO("qawsedrftghujikol");
 
     while(not check_start(node))
     {
-        for(int i=0;i<close_list_.size();i++)
+        // ROS_INFO("azsxdcfvgbhnjk,l");
+        for(int i=0;i<=close_list_.size();i++)
         {
+            // ROS_INFO("pqowieuryury");
+            // std::cout << "(" << close_list_[i].x << ", " << close_list_[i].y << ")" << std::endl;
             if(check_parent(i,node))
             {
+                // ROS_INFO("mzlajsncgfudlsb");
                 node = close_list_[i];
                 show_node_point(node);
                 partial_path.poses.push_back(node_to_pose(node));
+                // ROS_INFO("create path was ended...");
                 break;
             }
         }
+        // printf("\n\n\n\n\n");
     }
+    reverse(partial_path.poses.begin(),partial_path.poses.end());
+    show_path(partial_path);
+    global_path_.poses.insert(global_path_.poses.end(),partial_path.poses.begin(),partial_path.poses.end());
 }
 
 bool Astar::check_parent(const int index, const Node node)  //親ノードの確認
@@ -283,18 +325,23 @@ bool Astar::check_parent(const int index, const Node node)  //親ノードの確
 
 geometry_msgs::PoseStamped Astar::node_to_pose(const Node node)  //ノードから座標の検索
 {
+    // ROS_INFO("Node To Pose was started...");
     geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.pose.position.x = node.x * map_.info.resolution + map_.info.origin.position.x;
-    pose_stamped.pose.position.y = node.y * map_.info.resolution + map_.info.origin.position.y;
+    pose_stamped.pose.position.x = node.x * resolution_ + map_.info.origin.position.x;
+    pose_stamped.pose.position.y = node.y * resolution_ + map_.info.origin.position.y;
     return pose_stamped;
 }
 
-
 int Astar::search_node_from_list(const Node node, std::vector<Node>& list)  //リストの中を検索
 {
+    // ROS_INFO("searching node from list started...");
     for(int i=0;i<list.size();i++)
         if(check_same_node(node, list[i]))
+        {
+            // ROS_INFO("searching node from list success...");
             return i;
+        }
+    // ROS_INFO("searching node from list ended...");
     return -1;
 }
 
@@ -303,6 +350,7 @@ void Astar::planning()  //経路計画
     const int total_phase = 5;
     for(int phase=0;phase<total_phase;phase++)
     {
+        printf("phase %d is starting...\n",phase);
         open_list_.clear();
         close_list_.clear();
 
@@ -310,41 +358,47 @@ void Astar::planning()  //経路計画
         goal_node_ = set_way_point(phase + 1);
         start_node_.f = make_heuristic(start_node_);
         open_list_.push_back(start_node_);
-
-        ROS_INFO("ittyauyon");
+        std::cout << "startnode (" << start_node_.x << "," << start_node_.y << "," << start_node_.f << ")" << std::endl;
 
         while(ros::ok())
         {
             Node min_node = select_min_f();
+            std::cout << "current_node =(" << min_node.x << "," << min_node.y << ")" << std::endl;
             show_node_point(min_node);
 
             if(check_goal(min_node))
             {
                 create_path(min_node);
+                // ROS_INFO("hogehoGe");
                 break;
             }
             else
             {
                 swap_node(min_node,open_list_,close_list_);
                 update_list(min_node);
+                // ROS_INFO("wassyoi!");
             }
         }
+        // ROS_INFO("hugahuga");
     }
+    pub_path_.publish(global_path_);
+    ROS_INFO("COMPLITE ASTAR PROGLAM");
+    exit(0);
 }
 
 void Astar::process()  //メイン関数で実行する関数
 {
-    ROS_INFO("hajimattayo");
+    ROS_INFO("process is starting...");
     ros::Rate loop_rate(hz_);
 
     while(ros::ok())
     {
-        if(map_checker_)
-        {
+        if(!map_checker_)
+            ROS_INFO("NOW LOADING...");
+        else
             planning();
-            ros::spinOnce();
-            loop_rate.sleep();
-        }
+        ros::spinOnce();
+        loop_rate.sleep();
     }
 }
 
