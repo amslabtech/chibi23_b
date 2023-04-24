@@ -14,8 +14,8 @@ class LocalGoalCreator
 
     private:
         void global_path_callback(const nav_msgs::Path::ConstPtr &msg);
-        void current_pose_callback(const geometry_msgs::Path::ConstPtr &msg);
-        void select_local_goal();
+        void current_pose_callback(const geometry_msgs::PoseStamped::ConstPtr &msg);
+        void make_local_goal();
 
         int hz_;
         int goal_index_;
