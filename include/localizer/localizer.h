@@ -70,7 +70,8 @@ class Localizer
         void resampling();
 
         void publish_particles();
-
+        void publish_estimated_pose();
+        void broadcast_roomba_state();
 
         int hz_;
         int particle_num_;

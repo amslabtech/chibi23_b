@@ -31,18 +31,27 @@ void Particle::set_weight(double weight)
 //コンストラクタ
 Localizer::Localizer():private_nh_("~")
 {
-    private_nh_.param("hz", hz_, 10) ;
-    private_nh_.param("particle_num", particle_num_, 100) ;
-    private_nh_.param("init_x", init_x_, 0.0) ;
-    private_nh_.param("init_y", init_y_, 0.0) ;
-    private_nh_.param("init_yaw", init_yaw_, 0.0) ;
-    private_nh_.param("init_dev", init_dev_, 0.4) ;
-    private_nh_.param("move_distance_dev", move_distance_dev_, 0.25);
-    private_nh_.param("move_direction_dev", move_direction_dev_, 0.25);
-    private_nh_.param("move_rotation_dev", move_rotation_dev_, 0.25);
+    private_nh_.getParam("hz", hz_);
+    private_nh_.getParam("particle_num",particle_num_);
+    private_nh_.getParam("init_x", init_x_);
+    private_nh_.getParam("init_y", init_y_);
+    private_nh_.getParam("init_yaw", init_yaw_);
+    private_nh_.getParam("init_dev", init_dev_);
+    private_nh_.getParam("move_distance_dev", move_distance_dev_);
+    private_nh_.getParam("move_direction_dev", move_direction_dev_);
+    private_nh_.getParam("move_rotation_dev", move_rotation_dev_);
+    private_nh_.getParam("laser_step", laser_step_);
+    private_nh_.getParam("laser_ignore_range", laser_ignore_range_);
+    private_nh_.getParam("laser_distance_dev", laser_distance_dev_);
+    private_nh_.getParam("alpha_th", alpha_th_);
+    private_nh_.getParam("expansion_limit", expansion_limit_);
+    private_nh_.getParam("expansion_reset_dev", expansion_reset_dev_);
+    private_nh_.getParam("alpha_slow_th", alpha_slow_th_);
+    private_nh_.getParam("alpha_fast_th", alpha_fast_th_);
+    private_nh_.getParam("resampling_reset_dev", resampling_reset_dev_);
 
-    sub_laser_ = nh_.subscribe("/scan", 10, &Localizer::laser_callback, this);
     sub_odometry_ = nh_.subscribe("/roomba/odometry", 10, &Localizer::odometry_callback, this);
+    sub_laser_ = nh_.subscribe("/scan", 10, &Localizer::laser_callback, this);
     sub_map_ = nh_.subscribe("/map", 10, &Localizer::map_callback, this);
 
     pub_estimated_pose_ = nh_.advertise<geometry_msgs::PoseStamped>("/estimated_pose", 1);
@@ -79,6 +88,7 @@ void Localizer::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg)
 void Localizer::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     laser_ = *msg;
+    laser_callback_flag_ = true;
 }
 
 //ノイズを付与する関数dist
@@ -131,8 +141,8 @@ void Localizer::move(Particle& p, double distance, double direction, double rota
 //パーティクルの動作を更新する関数
 void Localizer::motion_update()
 {
-    double dx = current_odometry_.pose.pose.position.x = previous_odometry_.pose.pose.position.x;
-    double dy = current_odometry_.pose.pose.position.y = previous_odometry_.pose.pose.position.y;
+    double dx = current_odometry_.pose.pose.position.x - previous_odometry_.pose.pose.position.x;
+    double dy = current_odometry_.pose.pose.position.y - previous_odometry_.pose.pose.position.y;
     double cur_yaw = tf2::getYaw(current_odometry_.pose.pose.orientation);
     double pre_yaw = tf2::getYaw(previous_odometry_.pose.pose.orientation);
     double dyaw = optimize_angle(cur_yaw - pre_yaw);
@@ -379,6 +389,52 @@ void Localizer::publish_particles()
     pub_particle_cloud_.publish(particle_cloud_msg_);
 }
 
+void Localizer::publish_estimated_pose()
+{
+    estimated_pose_msg_.header.stamp = ros::Time::now();
+    estimated_pose_msg_.header.frame_id = "map";
+
+    estimated_pose_msg_.pose.position.x = estimated_pose_.get_pose_x();
+    estimated_pose_msg_.pose.position.y = estimated_pose_.get_pose_y();
+
+    tf2::Quaternion q;
+    q.setRPY(0.0, 0.0, estimated_pose_.get_pose_yaw());
+    tf2::convert(q, estimated_pose_msg_.pose.orientation);
+
+    pub_estimated_pose_.publish(estimated_pose_msg_);
+}
+
+void Localizer::broadcast_roomba_state()
+{
+    double map_to_base_x = estimated_pose_.get_pose_x();
+    double map_to_base_y = estimated_pose_.get_pose_y();
+    double map_to_base_yaw = estimated_pose_.get_pose_yaw();
+
+    double odom_to_base_x = current_odometry_.pose.pose.position.x;
+    double odom_to_base_y = current_odometry_.pose.pose.position.y;
+    double odom_to_base_yaw = tf2::getYaw(current_odometry_.pose.pose.orientation);
+
+    double roomba_state_yaw = optimize_angle(map_to_base_yaw - odom_to_base_yaw);
+    double roomba_state_x = map_to_base_x - odom_to_base_x * cos(roomba_state_yaw) + odom_to_base_y * sin(roomba_state_yaw);
+    double roomba_state_y = map_to_base_y - odom_to_base_x * sin(roomba_state_yaw) - odom_to_base_y * cos(roomba_state_yaw);
+
+    geometry_msgs::Quaternion roomba_state_q;
+    tf::quaternionTFToMsg(tf::createQuaternionFromYaw(roomba_state_yaw), roomba_state_q);
+
+    geometry_msgs::TransformStamped roomba_state;
+    roomba_state.header.stamp = ros::Time::now();
+
+    roomba_state.header.frame_id = "map";
+    roomba_state.child_frame_id = "odom";
+
+    roomba_state.transform.translation.x = roomba_state_x;
+    roomba_state.transform.translation.y = roomba_state_y;
+    roomba_state.transform.translation.z = 0.0;
+    roomba_state.transform.rotation = roomba_state_q;
+
+    roomba_state_broadcaster_.sendTransform(roomba_state);
+}
+
 
 void Localizer::process()
 {
@@ -386,7 +442,7 @@ void Localizer::process()
 
     while(ros::ok())
     {
-        if(map_callback_flag_)
+        if(odometry_callback_flag_ && map_callback_flag_ && laser_callback_flag_)
         {
             if(init_request_flag_)
             {
@@ -394,11 +450,25 @@ void Localizer::process()
                 init_request_flag_ = false;
             }
 
-            for(auto& p : particles_){
-                move(p, 0.1, M_PI/12, M_PI/24);
-                publish_particles();
+            if(moving_flag_)
+            {
+                motion_update();
+                measurement_update();
+            }
+
+            publish_particles();
+            publish_estimated_pose();
+
+            try
+            {
+                broadcast_roomba_state();
+            }
+            catch(tf::TransformException &ex)
+            {
+                ROS_ERROR("%s", ex.what());
             }
         }
+
 
         ros::spinOnce();
         loop_rate.sleep();
