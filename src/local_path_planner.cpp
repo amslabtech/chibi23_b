@@ -3,22 +3,24 @@
 DWA::DWA():private_nh_("~")
 {
     private_nh_.param("hz", hz_, {10});
-    private_nh_.param("goal_tolerance", goal_tolerance_, {0.3});
-    private_nh_.param("max_vel", max_vel_, {0.2});
+    private_nh_.param("goal_tolerance", goal_tolerance_, {0.1});
+    private_nh_.param("max_vel", max_vel_, {0.4});
     private_nh_.param("min_vel", min_vel_, {0.0});
     private_nh_.param("max_yawrate", max_yawrate_, {1.0});
-    private_nh_.param("max_accel", max_accel_, {1.0});
-    private_nh_.param("max_yawaccel", max_dyawrate_, {1.0});
-    private_nh_.param("dt",dt_,{0.5});
-    private_nh_.param("predict_time", predict_time_, {1.0});
-    private_nh_.param("weight_heading", weight_heading_, {1.0});
-    private_nh_.param("weight_distance", weight_distance_, {1.0});
-    private_nh_.param("weight_velocity", weight_velocity_, {1.0});
-    private_nh_.param("search_range", search_range_, {5.0});
+    private_nh_.param("max_accel", max_accel_, {1000.0});
+    private_nh_.param("max_yawaccel", max_dyawrate_, {1000.0});
+    private_nh_.param("dt",dt_,{0.1});
+    private_nh_.param("predict_time", predict_time_, {3.0});
+    private_nh_.param("weight_heading", weight_heading_, {0.9});
+    private_nh_.param("weight_distance", weight_distance_, {1.5});
+    private_nh_.param("weight_velocity", weight_velocity_, {0.5});
+    private_nh_.param("search_range", search_range_, {1.0});
     private_nh_.param("roomba_radius", roomba_radius_, {0.2});
     private_nh_.param("radius_margin", radius_margin_, {0.2});
     private_nh_.param("vel_reso", vel_reso_, {0.01});
     private_nh_.param("yawrate_reso", yawrate_reso_, {0.01});
+    private_nh_.param("is_visible", is_visible_, {true});
+
 
     //Subscriber
     sub_local_goal_ = nh_.subscribe("/local_goal", 1, &DWA::local_goal_callback, this);
@@ -28,11 +30,13 @@ DWA::DWA():private_nh_("~")
     pub_cmd_vel_    = nh_.advertise<roomba_500driver_meiji::RoombaCtrl>("/roomba/control", 1);
     pub_predict_path_ = nh_.advertise<nav_msgs::Path>("/predict_local_paths", 1);
     pub_optimal_path_ = nh_.advertise<nav_msgs::Path>("/optimal_local_path", 1);
+    //pub_local_path_ = nh_.advertise<nav_msgs::Path>("/local_path", 1);
 }
 
 void DWA::local_goal_callback(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
     local_goal_=*msg;
+    flag_local_goal_ = true;
 }
 
 void DWA::obstacle_poses_callback(const geometry_msgs::PoseArray::ConstPtr& msg)
@@ -46,8 +50,8 @@ bool DWA::can_move()
 {
     if(!(flag_local_goal_ && flag_ob_poses_)) return false;
 
-    const double dx = local_goal_.point.x;
-    const double dy = local_goal_.point.y;
+    const double dx = local_goal_.point.x - roomba_.x;
+    const double dy = local_goal_.point.y - roomba_.y;
     const double dist_to_goal = hypot(dx, dy);
 
     if(dist_to_goal > goal_tolerance_)
@@ -55,8 +59,6 @@ bool DWA::can_move()
     else
         return false;
 }
-
-
 
 //Dynamic Window計算
 void DWA::calc_dynamic_window()
@@ -72,11 +74,11 @@ void DWA::calc_dynamic_window()
 }
 
 
-double DWA::calc_evaluation(const std::vector<State>& trajectory)
+double DWA::calc_evaluation(const std::vector<State>& traj)
 {
-    const double heading_cost  = weight_heading_ * calc_heading_score(trajectory);
-    const double distance_cost = weight_distance_ * calc_dist_score(trajectory);
-    const double velocity_cost = weight_velocity_ * calc_vel_score(trajectory);
+    const double heading_cost  = weight_heading_ * calc_heading_score(traj);
+    const double distance_cost = weight_distance_ * calc_dist_score(traj);
+    const double velocity_cost = weight_velocity_ * calc_vel_score(traj);
 
 
 
@@ -84,11 +86,11 @@ double DWA::calc_evaluation(const std::vector<State>& trajectory)
     return total_cost;
 }
 
-double DWA::calc_heading_score(const std::vector<State>& trajectory)
+double DWA::calc_heading_score(const std::vector<State>& traj)
 {
-    const double theta = trajectory.back().yaw;
+    const double theta = traj.back().yaw;
 
-    const double goal_theta = atan2(local_goal_.point.y - trajectory.back().y, local_goal_.point.x - trajectory.back().x);
+    const double goal_theta = atan2(local_goal_.point.y - traj.back().y, local_goal_.point.x - traj.back().x);
 
     double target_theta = 0.0;
 
@@ -97,16 +99,15 @@ double DWA::calc_heading_score(const std::vector<State>& trajectory)
     else
         target_theta = theta - goal_theta;
 
-
     const double heading_eval = (M_PI - abs(regulate_angle(target_theta)))/M_PI;
 
     return heading_eval;
 }
 
-double DWA::calc_dist_score(const std::vector<State>& trajectory)
+double DWA::calc_dist_score(const std::vector<State>& traj)
 {
     double min_dist = search_range_;
-    for(const auto& state : trajectory)
+    for(const auto& state : traj)
     {
         for(const auto& ob_pose : ob_poses_.poses)
         {
@@ -126,10 +127,10 @@ double DWA::calc_dist_score(const std::vector<State>& trajectory)
 
 
 //verocity評価関数
-double DWA::calc_vel_score(const std::vector<State>& trajectory)
+double DWA::calc_vel_score(const std::vector<State>& traj)
 {
-    if(0.0 < trajectory.back().velocity) // 前進
-        return trajectory.back().velocity/max_vel_; // 正規化
+    if(0.0 < traj.back().velocity) // 前進
+        return traj.back().velocity/max_vel_; // 正規化
 
     else
         return 0.0;
@@ -161,9 +162,9 @@ std::vector<double> DWA::calc_input()
     {
         for(double yawrate=dw_.min_yawrate; yawrate<=dw_.max_yawrate; yawrate+=yawrate_reso_)
         {
-            std::vector<State> trajectory = calc_trajectory(velocity, yawrate);
+            const std::vector<State> trajectory = calc_trajectory(velocity, yawrate);
 
-            const double score = calc_evaluation(trajectory);
+            double score = calc_evaluation(trajectory);
             trajectories.push_back(trajectory);
 
             if(max_score < score)
@@ -193,7 +194,7 @@ std::vector<double> DWA::calc_input()
 
         }
     }
-
+    ROS_INFO("input:%f %f",input[0],input[1]);
     return input;
 }
 
@@ -229,7 +230,7 @@ void DWA::roomba_control(double velocity, double yawrate)
     pub_cmd_vel_.publish(cmd_velocity_);
 }
 
-void DWA::visualize_traj(const std::vector<State>& trajectory, const ros::Publisher& pub_local_path, ros::Time now)
+void DWA::visualize_traj(const std::vector<State>& traj, const ros::Publisher& pub_local_path, ros::Time now)
 {
     nav_msgs::Path local_path;
     local_path.header.stamp = now;
@@ -240,7 +241,7 @@ void DWA::visualize_traj(const std::vector<State>& trajectory, const ros::Publis
     pose.header.frame_id = "base_link";
 
 
-    for(const auto& state : trajectory)
+    for(const auto& state : traj)
     {
         pose.pose.position.x = state.x;
         pose.pose.position.y = state.y;
@@ -258,11 +259,13 @@ void DWA::process()
     {
         if(can_move())
         {
+            //ROS_INFO("ugokeru");
             const std::vector<double> input = calc_input();
             roomba_control(input[0], input[1]);
         }
         else
         {
+            //ROS_INFO("ugokenn");
             roomba_control(0.0, 0.0);
         }
         ros::spinOnce();
