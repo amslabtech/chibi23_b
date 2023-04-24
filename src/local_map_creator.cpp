@@ -111,9 +111,9 @@ void LocalMapCreator::process()
             ROS_INFO("map_reso_:%f", map_reso_);
             ROS_INFO("map_size_:%f", map_size_);
             update_map();
-            ros::spinOnce();
-            loop_rate.sleep();
         }
+        ros::spinOnce();
+        loop_rate.sleep();
     }
 }
 
