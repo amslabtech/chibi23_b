@@ -10,7 +10,6 @@ LocalGoalCreator::LocalGoalCreator():private_nh_("~")
     current_pose_sub_ = nh_.subscribe("/estimated_pose", 10, &LocalGoalCreator::current_pose_callback, this);
 
     local_goal_pub_ = nh_.advertise<geometry_msgs::PointStamped>("/local_goal", 10);
-
     local_goal_.header.frame_id = "map";
 }
 

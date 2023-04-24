@@ -1,178 +1,127 @@
-#include "obstacle_detector/obstacle_detector.h"
+#include "local_map_creator/local_map_creator.h"
 
 LocalMapCreator::LocalMapCreator():private_nh_("~")
 {
     private_nh_.param("hz", hz_, {10});
-    private_nh_.param("map_size", map_size_, {4});
-    private_nh_.param("map_reso", map_reso_, {0.02});
-    private_nh_.param("roomba_radius", roomba_radius_, {0.2});
-    private_nh_.param("flag_map_view", flag_map_view_, {true});
-    // private_nh_.param("flag_map_view", flag_map_view_, {false});
-    // private_nh_.param("flag_pose_callback", flag_pose_callback_, {true});
-    private_nh_.param("flag_pose_callback", flag_pose_callback_, {false});
-    // private_nh_.param("flag_odo_callback", flag_odo_callback_, {true});
-    private_nh_.param("flag_odo_callback", flag_odo_callback_, {false});
+    private_nh_.param("map_size", map_size_, {4.0});
+    private_nh_.param("map_reso", map_reso_, {0.025});
 
-    laser_sub_ = nh_.subscribe("scan", 10, &LocalMapCreator::laser_callback, this);
-    pose_sub_ = nh_.subscribe("/estimated_pose", 1, &LocalMapCreator::pose_callback, this);
-    odo_sub_ = nh_.subscribe("/roomba/odometry", 100, &LocalMapCreator::odo_callback, this);
-    local_map_pub_ = nh_.advertise<nav_msgs::OccupancyGrid>("local_map_test", 10);
-    obstacle_poses_pub_ = nh_.advertise<geometry_msgs::PoseArray>("/local_map/obstacle", 10);
+    sub_obs_poses_ = nh_.subscribe("/local_map/obstacle", 1, &LocalMapCreator::obs_poses_callback, this);
 
-    obstacle_poses_.header.frame_id = "base_link";
+    pub_local_map_ = nh_.advertise<nav_msgs::OccupancyGrid>("local_map", 1);
+
     local_map_.header.frame_id = "base_link";
-    local_map_.info.resolution = map_reso_;
-    local_map_.info.width = map_size_ / map_reso_;
-    local_map_.info.height = map_size_ / map_reso_;
-    local_map_.info.origin.position.x = - map_size_ / 2;
-    local_map_.info.origin.position.y = - map_size_ / 2;
+    local_map_.info.resolution = map_reso_; //マップの解像度
+    local_map_.info.width = int(round(map_size_/map_reso_)); //マップの幅
+    local_map_.info.height = int(round(map_size_/map_reso_)); //マップの高さ
+    local_map_.info.origin.position.x = -map_size_/2.0;
+    local_map_.info.origin.position.y = -map_size_/2.0;
+
     local_map_.data.reserve(local_map_.info.width * local_map_.info.height);
 }
 
-//laserから情報を受け取る
-void LocalMapCreator::laser_callback(const sensor_msgs::LaserScan::ConstPtr &msg)
+void LocalMapCreator::obs_poses_callback(const geometry_msgs::PoseArray::ConstPtr& msg) //障害物の位置のコールバック
 {
-    laser_ = *msg;
-    if(flag_map_view_)
-    {
-        init_map();
-    }
-    create_local_map();
-    is_laser_checker_ = true;
+    obs_poses_ = *msg;
+    is_obs_poses_checker_ = true;
 }
 
-//現在位置とマップのずれをチェック
-void LocalMapCreator::pose_callback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+void LocalMapCreator::init_map() //マップの初期化
 {
-    if(flag_pose_callback_)
-    {
-        current_pose_ = *msg;
-        diff_.position.x = current_pose_.pose.position.x - previous_pose_.position.x;
-        diff_.position.y = current_pose_.pose.position.y - previous_pose_.position.y;
-        previous_pose_ = current_pose_.pose;
+    local_map_.data.clear(); //配列を空に
 
-        if(is_first_pose_checker_)
-        {
-            is_second_pose_checker_ = true;
-        }
-        is_first_pose_checker_ = true;
-    }
-    else
-    {
-        return;
-    }
-}
-
-void LocalMapCreator::odo_callback(const nav_msgs::Odometry::ConstPtr &msg)
-{
-    if(flag_odo_callback_)
-    {
-        current_odo_ = *msg;
-        diff_.position.x = current_odo_.pose.pose.position.x - previous_odo_.pose.pose.position.x;
-        diff_.position.y = current_odo_.pose.pose.position.y - previous_odo_.pose.pose.position.y;
-        previous_odo_ = current_odo_;
-
-        if(is_first_pose_checker_)
-        {
-            is_second_pose_checker_ = true;
-        }
-        is_first_pose_checker_ = true;
-    }
-    else
-    {
-        return;
-    }
-}
-
-//マップの初期化
-alMapCreator::init_map()
-{
-    local_map_.data.clear();
-    int size = local_map_.info.width * local_map_.info.height;
+    const int size = local_map_.info.width * local_map_.info.height;
     for(int i=0; i<size; i++)
     {
-        local_map_.data.push_back(-1);
+        local_map_.data.push_back(-1); //すべてを未知
     }
 }
 
-//受け取ったx,yについて、マップのどのセルを示しているか計算する
-int LocalMapCreator::xy_to_map_index(double x, double y)
+
+void LocalMapCreator::update_map() //マップの更新
 {
-    int x_index = (x - local_map_.info.origin.position.x) / map_reso_;
-    int y_index = (y - local_map_.info.origin.position.y) / map_reso_;
+    init_map();
 
-    return x_index + y_index * local_map_.info.width;
-}
+    for(const auto& obs_pose : obs_poses_.poses)
+    {
+        const double obs_x     = obs_pose.position.x;
+        const double obs_y     = obs_pose.position.y;
+        const double obs_dist  = hypot(obs_y, obs_x);
+        const double obs_angle = atan2(obs_y, obs_x);
 
-//受け取ったx,yが、あらかじめ決めたlocal_mapのサイズにおさまっているか判定
-bool LocalMapCreator::is_map_range_checker(double x, double y)
-{
-    double x_min = local_map_.info.origin.position.x;
-    double y_min = local_map_.info.origin.position.y;
-    double x_max = x_min + local_map_.info.width * local_map_.info.resolution;
-    double y_max = y_min + local_map_.info.height * local_map_.info.resolution;
-
-    if((x_min < x) && (x_max > x) && (y_min < y) && (y_max > y))
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-//受け取った角度が、車体の柱の部分かどうか判定
-bool LocalMapCreator::is_ignore_angle_checker(double angle)
-{
-    angle = abs(angle);
-
-    if((angle > M_PI * 2/16) && (angle < M_PI * 5/16))  //柱の位置
-    {
-        return false;
-    }
-    else if(angle > M_PI * 11/16)                       //柱の位置
-    {
-        return false;
-    }
-    else                                                //柱の位置ではない
-    {
-        return true;
-    }
-}
-
-//laserの測定値がroomba半径付近かどうか判定
-bool LocalMapCreator::is_range_checker(double laser_range)
-{
-    if(laser_range < roomba_radius_)
-    {
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
-
-//角度ごとにマップを作成
-void LocalMapCreator::create_line(double angle, double laser_range)
-{
-    if(!is_ignore_angle_checker(angle))
-    {
-        laser_range = map_size_;
-    }
-
-    for(double distance = 0; distance < map_size_; distance+=map_reso_)
-    {
-        double x_now = distance * std::cos(angle);
-        double y_now = distance * std::sin(angle);
-
-        if(!is_map_range_checker(x_now, y_now))
+        for(double dist_from_start=0.0; (dist_from_start<obs_dist and is_map_checker(dist_from_start, obs_angle)); dist_from_start+=map_reso_)
         {
-            return;
+            const int grid_index = d_a_grid_index(dist_from_start, obs_angle);
+            local_map_.data[grid_index] = 0; //「空き」にする
         }
 
-        int map_index = xy_to_map_index(x_now, y_now);
+        if(is_map_checker(obs_dist, obs_angle))
+        {
+            const int grid_index = xy_grid_index(obs_x, obs_y);
+            local_map_.data[grid_index] = 100; //「占有」にする
+        }
+    }
 
-        if(first_map_checker_)  //マップ作成2回目以降
 
+    pub_local_map_.publish(local_map_);
+
+}
+
+bool LocalMapCreator::is_map_checker(const double dist, const double angle) //マップ内にいるか判定
+{
+    const double x = dist * cos(angle);
+    const double y = dist * sin(angle);
+    const int index_x = int(round((x - local_map_.info.origin.position.x) / local_map_.info.resolution));
+    const int index_y = int(round((y - local_map_.info.origin.position.y) / local_map_.info.resolution));
+
+    if(index_x<local_map_.info.width and index_y<local_map_.info.height) //インデックスがそれぞれマップに収まっているか
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+int LocalMapCreator::d_a_grid_index(const double dist, const double angle) //距離と角度からグリッドに
+{
+    const double x = dist * cos(angle);
+    const double y = dist * sin(angle);
+
+    return xy_grid_index(x, y);
+}
+
+int LocalMapCreator::xy_grid_index(const double x, const double y) //座標からグリッドに
+{
+    const int index_x = int(round((x - local_map_.info.origin.position.x) / local_map_.info.resolution));
+    const int index_y = int(round((y - local_map_.info.origin.position.y) / local_map_.info.resolution));
+
+    return index_x + (index_y * local_map_.info.height);
+}
+
+void LocalMapCreator::process()
+{
+    ros::Rate loop_rate(hz_);
+
+    while(ros::ok())
+    {
+        if(is_obs_poses_checker_)
+        {
+            ROS_INFO("map_reso_:%f", map_reso_);
+            ROS_INFO("map_size_:%f", map_size_);
+            update_map();
+            ros::spinOnce();
+            loop_rate.sleep();
+        }
+    }
+}
+
+int main(int argc, char* argv[])
+{
+    ros::init(argc, argv, "local_map_creator"); // ノードの初期化
+    LocalMapCreator local_map_creator;
+    local_map_creator.process();
+
+    return 0;
+}
