@@ -17,12 +17,13 @@ DWA::DWA():private_nh_("~")
     private_nh_.param("search_range", search_range_, {1.0});
     private_nh_.param("roomba_radius", roomba_radius_, {0.2});
     private_nh_.param("radius_margin", radius_margin_, {0.2});
-    private_nh_.param("vel_reso", vel_reso_, {0.01});
-    private_nh_.param("yawrate_reso", yawrate_reso_, {0.01});
+    private_nh_.param("vel_reso", vel_reso_, {0.05});
+    private_nh_.param("yawrate_reso", yawrate_reso_, {0.02});
     private_nh_.param("is_visible", is_visible_, {true});
 
 
     //Subscriber
+
     sub_local_goal_ = nh_.subscribe("/local_goal", 1, &DWA::local_goal_callback, this);
     sub_ob_poses_   = nh_.subscribe("/local_map/obstacle", 1, &DWA::obstacle_poses_callback, this);
 
@@ -36,12 +37,14 @@ DWA::DWA():private_nh_("~")
 void DWA::local_goal_callback(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
     local_goal_=*msg;
+    ROS_INFO("local_goal:OK");
     flag_local_goal_ = true;
 }
 
 void DWA::obstacle_poses_callback(const geometry_msgs::PoseArray::ConstPtr& msg)
 {
     ob_poses_ = *msg;
+    ROS_INFO("ob:OK");
     flag_ob_poses_ = true;
 }
 
@@ -50,6 +53,7 @@ bool DWA::can_move()
 {
     if(!(flag_local_goal_ && flag_ob_poses_)) return false;
 
+    ROS_INFO("l_goal:%f",local_goal_.point.x);
     const double dx = local_goal_.point.x - roomba_.x;
     const double dy = local_goal_.point.y - roomba_.y;
     const double dist_to_goal = hypot(dx, dy);
@@ -160,6 +164,7 @@ std::vector<double> DWA::calc_input()
     int i=0;
     for(double velocity=dw_.min_vel; velocity<=dw_.max_vel; velocity+=vel_reso_)
     {
+        // if(velocity==0.0) continue;
         for(double yawrate=dw_.min_yawrate; yawrate<=dw_.max_yawrate; yawrate+=yawrate_reso_)
         {
             const std::vector<State> trajectory = calc_trajectory(velocity, yawrate);
@@ -219,6 +224,7 @@ void DWA::virtual_rb(State& state, const double velocity, const double yawrate)
     state.x += velocity * cos(state.yaw) * dt_;
     state.y += velocity * sin(state.yaw) * dt_;
     state.velocity = velocity;
+
     state.yawrate = yawrate;
 }
 
@@ -235,6 +241,7 @@ void DWA::visualize_traj(const std::vector<State>& traj, const ros::Publisher& p
     nav_msgs::Path local_path;
     local_path.header.stamp = now;
     local_path.header.frame_id = "base_link";
+
 
     geometry_msgs::PoseStamped pose;
     pose.header.stamp = now;

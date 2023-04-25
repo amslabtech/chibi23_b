@@ -433,6 +433,7 @@ void Localizer::broadcast_roomba_state()
     roomba_state.transform.rotation = roomba_state_q;
 
     roomba_state_broadcaster_.sendTransform(roomba_state);
+    ROS_INFO("localizer_broadcast:%f", roomba_state.transform.translation.x);
 }
 
 
@@ -448,6 +449,7 @@ void Localizer::process()
             {
                 initialize();
                 init_request_flag_ = false;
+
             }
 
             if(moving_flag_)
