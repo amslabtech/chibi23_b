@@ -1,4 +1,3 @@
-//maeda
 #include "local_path_planner/local_path_planner.h"
 DWA::DWA():private_nh_("~")
 {
