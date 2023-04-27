@@ -110,18 +110,13 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Alpha: 1
-      Axes Length: 1
-      Axes Radius: 0.10000000149011612
-      Class: rviz/Pose
-      Color: 255; 25; 0
+      Class: rviz/PointStamped
+      Color: 204; 41; 204
       Enabled: true
-      Head Length: 0.30000001192092896
-      Head Radius: 0.10000000149011612
-      Name: Pose
+      History Length: 1
+      Name: PointStamped
       Queue Size: 10
-      Shaft Length: 1
-      Shaft Radius: 0.05000000074505806
-      Shape: Arrow
+      Radius: 0.20000000298023224
       Topic: /current_node
       Unreliable: false
       Value: true
@@ -153,7 +148,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 53.29135513305664
+      Distance: 146.18853759765625
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -169,9 +164,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.1947964429855347
       Target Frame: <Fixed Frame>
-      Yaw: 3.1153974533081055
+      Yaw: 3.095396041870117
     Saved: ~
 Window Geometry:
   Displays:

@@ -36,7 +36,7 @@ private:
     void swap_node(const Node node, std::vector<Node>& list1,std::vector<Node>& list2);  //リスト間の移動
     void show_node_point(const Node node);  //ノードの表示
     void show_path(nav_msgs::Path& current_path);  //パスの表示
-    void get_way_points(std::vector<std::vector<int>>& list);  //経由点の宣言
+    // void get_way_points(std::vector<std::vector<int>>& list);  //経由点の宣言
     void planning();  //経路計画
     void create_path(Node node);  //経路作成
     void update_list(const Node node);  //隣接ノードの更新
@@ -64,7 +64,8 @@ private:
 
     double origin_x_;  //原点のx座標
     double origin_y_;  //原点のy座標
-    std::vector<std::vector<int>> way_points_;  //経由点たち
+    std::vector<double> way_points_x_;  //経由点
+    std::vector<double> way_points_y_;  //経由点
 
     int hz_;  //周波数
     Node start_node_;  //開始位置
@@ -72,7 +73,7 @@ private:
     std::vector<Node> open_list_;  //opneリスト
     std::vector<Node> close_list_;  //closeリスト
 
-    bool   map_checker_;  //正しくマップはとれたかな
+    bool   map_checker_ = false;  //正しくマップはとれたかな
     bool   test_show_;  //デバッグしますか
 
     //map製作用

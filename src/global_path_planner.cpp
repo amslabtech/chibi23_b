@@ -2,13 +2,15 @@
 
 Astar::Astar():private_nh_("~")
 {
-    private_nh_.param("hz", hz_, {10});
-    private_nh_.param("map_checker_", map_checker_, {false});
-    private_nh_.param("test_show_", test_show_, {true});
-    private_nh_.param("sleep_time_", sleep_time_, {0.002});
-//    private_nh_.param("path_checker", path_checker_, {false});
-//    private_nh_.param("is_reached", is_reached_, {false});
-//    private_nh_.param("wall_cost", wall_cost_, {1e10});
+    private_nh_.getParam("hz", hz_);
+    // private_nh_.getParam("map_checker", map_checker_);
+    private_nh_.getParam("test_show", test_show_);
+    private_nh_.getParam("sleep_time", sleep_time_);
+    private_nh_.getParam("way_points_x", way_points_x_);
+    private_nh_.getParam("way_points_y", way_points_y_);
+//    private_nh_.getParam("path_checker", path_checker_, {false});
+//    private_nh_.getParam("is_reached", is_reached_, {false});
+//    private_nh_.getParam("wall_cost", wall_cost_, {1e10});
 
     global_path_.header.frame_id  = "map";
     current_node_.header.frame_id = "map";
@@ -20,7 +22,7 @@ Astar::Astar():private_nh_("~")
     if(test_show_)
     {
         pub_current_path_ = nh_.advertise<nav_msgs::Path>("/current_path", 1);
-        pub_node_point_ = nh_.advertise<geometry_msgs::PoseStamped>("/current_node", 1);
+        pub_node_point_ = nh_.advertise<geometry_msgs::PointStamped>("/current_node", 1);
     }
 }
 
@@ -37,50 +39,13 @@ void Astar::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg)  //マッ
     map_checker_ = true;
 }
 
-void Astar::get_way_points(std::vector<std::vector<int>>& list)  //経由点の宣言
-{
-    // ROS_INFO("getting waypoints started...");
-    int x0,y0,x1,y1,x2,y2,x3,y3,x4,y4,x5,y5,x6,y6,x7,y7,x8,y8,x9,y9;
-    x0 = x9 = - origin_x_ / resolution_;
-    y0 = y9 = - origin_y_ / resolution_;
-    x1 = round((8.88 - origin_x_) / resolution_);
-    y1 = round((0.15 - origin_y_) / resolution_);
-    x2 = round((9.52 - origin_x_) / resolution_);
-    y2 = round((7.04 - origin_y_) / resolution_);
-    x3 = round((9.18 - origin_x_) / resolution_);
-    y3 = round((14.1 - origin_y_) / resolution_);
-    x4 = round((-7.43 - origin_x_) / resolution_);
-    y4 = round((14.25 - origin_y_) / resolution_);
-    x5 = round((-24.39 - origin_x_) / resolution_);
-    y5 = round((14.38 - origin_y_) / resolution_);
-    x6 = round((-24.43 - origin_x_) / resolution_);
-    y6 = round((7.20 - origin_y_) / resolution_);
-    x7 = round((-24.58 - origin_x_) / resolution_);
-    y7 = round((0.174 - origin_y_) / resolution_);
-    x8 = round((-8.00 - origin_x_) / resolution_);
-    y8 = round((0.166 - origin_y_) / resolution_);
-
-    list = {
-        {x0,y0},
-        {x1,y1},
-        {x2,y2},
-        {x3,y3},
-        {x4,y4},
-        {x5,y5},
-        {x6,y6},
-        {x7,y7},
-        {x8,y8},
-        {x9,y9},
-    };
-}
-
 Node Astar::set_way_point(const int phase)  //スタートとゴールの取得
 {
     // ROS_INFO("setting waypoint started...");
-    get_way_points(way_points_);
+    // get_way_points(way_points_);
     Node way_point;
-    way_point.x = way_points_[phase][0];
-    way_point.y = way_points_[phase][1];
+    way_point.x = round((way_points_x_[phase] - origin_x_) / resolution_);
+    way_point.y = round((way_points_y_[phase] - origin_y_) / resolution_);
     return way_point;
 }
 
@@ -314,7 +279,7 @@ std::tuple<int, int> Astar::search_node(const Node node)  //どこのリスト�
 
 void Astar::create_path(Node node)  //パスの作成
 {
-    ROS_INFO("making path...");
+    // ROS_INFO("making path...");
     nav_msgs::Path partial_path;
     partial_path.poses.push_back(node_to_pose(node));
     // ROS_INFO("qawsedrftghujikol");u
@@ -393,7 +358,7 @@ void Astar::planning()  //経路計画
     const int total_phase = 9;
     for(int phase=0;phase<total_phase;phase++)
     {
-        printf("phase %d is starting...\n",phase);
+        // printf("phase %d is starting...\n",phase);
         open_list_.clear();
         close_list_.clear();
 
@@ -401,8 +366,8 @@ void Astar::planning()  //経路計画
         goal_node_ = set_way_point(phase + 1);
         start_node_.f = make_heuristic(start_node_);
         open_list_.push_back(start_node_);
-        std::cout << "startnode (" << start_node_.x << "," << start_node_.y << "," << start_node_.f << ")" << std::endl;
-        std::cout << "goalnode (" << goal_node_.x << "," << goal_node_.y << "," << goal_node_.f << ")" << std::endl;
+        // std::cout << "startnode (" << start_node_.x << "," << start_node_.y << "," << start_node_.f << ")" << std::endl;
+        // std::cout << "goalnode (" << goal_node_.x << "," << goal_node_.y << "," << goal_node_.f << ")" << std::endl;
 
         while(ros::ok())
         {
