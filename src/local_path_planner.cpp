@@ -1,4 +1,3 @@
-//maeda
 #include "local_path_planner/local_path_planner.h"
 DWA::DWA():private_nh_("~")
 {
@@ -8,7 +7,7 @@ DWA::DWA():private_nh_("~")
     private_nh_.param("min_vel", min_vel_, {0.0});
     private_nh_.param("max_yawrate", max_yawrate_, {1.0});
     private_nh_.param("max_accel", max_accel_, {1000.0});
-    private_nh_.param("max_yawaccel", max_dyawrate_, {1000.0});
+    private_nh_.param("max_dyawrate", max_dyawrate_, {1000.0});
     private_nh_.param("dt",dt_,{0.1});
     private_nh_.param("predict_time", predict_time_, {3.0});
     private_nh_.param("weight_heading", weight_heading_, {0.9});
