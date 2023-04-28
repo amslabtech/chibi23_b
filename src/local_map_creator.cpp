@@ -59,6 +59,7 @@ void LocalMapCreator::update_map() //マップの更新
         {
             const int grid_index = xy_grid_index(obs_x, obs_y);
             local_map_.data[grid_index] = 100; //「占有」にする
+            ROS_INFO("grid_index:%d", grid_index);
         }
     }
 
@@ -108,8 +109,6 @@ void LocalMapCreator::process()
     {
         if(is_obs_poses_checker_)
         {
-            ROS_INFO("map_reso_:%f", map_reso_);
-            ROS_INFO("map_size_:%f", map_size_);
             update_map();
         }
         ros::spinOnce();

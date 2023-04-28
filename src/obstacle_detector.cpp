@@ -44,6 +44,7 @@ void ObstacleDetector::scan_obstacle()
         geometry_msgs::Pose obs_pose;
         obs_pose.position.x = dist * cos(angle);
         obs_pose.position.y = dist * sin(angle);
+        ROS_INFO("x:%f", obs_pose.position.x);
 
 
         obs_poses_.poses.push_back(obs_pose);
