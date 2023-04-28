@@ -45,10 +45,14 @@ Localizer::Localizer():private_nh_("~")
     private_nh_.getParam("laser_distance_dev", laser_distance_dev_);
     private_nh_.getParam("alpha_th", alpha_th_);
     private_nh_.getParam("expansion_limit", expansion_limit_);
-    private_nh_.getParam("expansion_reset_dev", expansion_reset_dev_);
+    private_nh_.getParam("expansion_reset_x_dev", expansion_reset_x_dev_);
+    private_nh_.getParam("expansion_reset_y_dev", expansion_reset_y_dev_);
+    private_nh_.getParam("expansion_reset_yaw_dev", expansion_reset_yaw_dev_);
     private_nh_.getParam("alpha_slow_th", alpha_slow_th_);
     private_nh_.getParam("alpha_fast_th", alpha_fast_th_);
-    private_nh_.getParam("resampling_reset_dev", resampling_reset_dev_);
+    private_nh_.getParam("resampling_reset_x_dev", resampling_reset_x_dev_);
+    private_nh_.getParam("resampling_reset_y_dev", resampling_reset_y_dev_);
+    private_nh_.getParam("resampling_reset_yaw_dev", resampling_reset_yaw_dev_);
 
     sub_odometry_ = nh_.subscribe("/roomba/odometry", 10, &Localizer::odometry_callback, this);
     sub_laser_ = nh_.subscribe("/scan", 10, &Localizer::laser_callback, this);
@@ -71,7 +75,15 @@ void Localizer::odometry_callback(const nav_msgs::Odometry::ConstPtr& msg)
         previous_odometry_ = current_odometry_;
     }
 
-    if(current_odometry_ != previous_odometry_)
+    if(moving_count_ < 1)
+    {
+        origin_odometry_ = *msg;
+        moving_count_ += 1;
+    }
+
+    measuring_distance();
+
+    if(origin_distance_ > 1)
     {
         moving_flag_ = true;
     }
@@ -89,6 +101,15 @@ void Localizer::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     laser_ = *msg;
     laser_callback_flag_ = true;
+}
+
+//座標原点からの距離を計測する関数
+void Localizer::measuring_distance()
+{
+    double origin_dx = current_odometry_.pose.pose.position.x - origin_odometry_.pose.pose.position.x;
+    double origin_dy = current_odometry_.pose.pose.position.y - origin_odometry_.pose.pose.position.y;
+
+    origin_distance_ = hypot(origin_dx, origin_dy);
 }
 
 //ノイズを付与する関数dist
@@ -124,20 +145,6 @@ void Localizer::initialize()
     }
 }
 
-//パーティクルを動かす関数
-void Localizer::move(Particle& p, double distance, double direction, double rotation)
-{
-    distance += set_noise(0.0, distance * move_distance_dev_);
-    direction += set_noise(0.0, direction * move_direction_dev_);
-    rotation += set_noise(0.0, rotation * move_rotation_dev_);
-
-    double x = p.get_pose_x() + distance * cos(optimize_angle(direction + p.get_pose_yaw()));
-    double y = p.get_pose_y() + distance * sin(optimize_angle(direction + p.get_pose_yaw()));
-    double yaw = optimize_angle(p.get_pose_yaw() + rotation);
-
-    p.set_pose(x, y, yaw);
-}
-
 //パーティクルの動作を更新する関数
 void Localizer::motion_update()
 {
@@ -155,6 +162,20 @@ void Localizer::motion_update()
     }
 }
 
+//パーティクルを動かす関数
+void Localizer::move(Particle& p, double distance, double direction, double rotation)
+{
+    distance += set_noise(0.0, distance * move_distance_dev_);
+    direction += set_noise(0.0, direction * move_direction_dev_);
+    rotation += set_noise(0.0, rotation * move_rotation_dev_);
+
+    double x = p.get_pose_x() + distance * cos(optimize_angle(direction + p.get_pose_yaw()));
+    double y = p.get_pose_y() + distance * sin(optimize_angle(direction + p.get_pose_yaw()));
+    double yaw = optimize_angle(p.get_pose_yaw() + rotation);
+
+    p.set_pose(x, y, yaw);
+}
+
 //パーティクルの観測を更新する関数
 void Localizer::measurement_update()
 {
@@ -166,20 +187,24 @@ void Localizer::measurement_update()
 
     normalize_weight();
 
-    estimate_pose();
-
-//alpha_mean = 各パーティクルのlaser×1の重み（一様）
+    //alpha_mean = 各パーティクルのlaser×1の重み（一様）
     double alpha_mean = alpha_ / (laser_.ranges.size() / laser_step_ * particle_num_);
+
+    // ROS_INFO_STREAM("alpha_: "<<alpha_<<" alpha_mean: "<<alpha_mean);
 
     if(alpha_mean < alpha_th_ && expansion_count_ < expansion_limit_)
     {
+        median_pose();
         expansion_count_ ++;
         expansion_reset();
+        ROS_INFO("expansion reset");
     }
     else
     {
+        weighted_mean_pose();
         expansion_count_ = 0;
         resampling();
+        ROS_INFO("resampling");
     }
 }
 
@@ -204,6 +229,7 @@ double Localizer::calculate_weight(Particle& p)
 
         angle = optimize_angle(angle + angle_step * laser_step_);
     }
+    // ROS_INFO("weight: %f", weight);
     return weight;
 }
 
@@ -221,7 +247,9 @@ double Localizer::distance_on_map(double map_x, double map_y, double laser_angle
 
         int map_occupancy = get_map_occupancy(map_x, map_y);
 
-        if(map_occupancy != 0)    return distance;
+        if(map_occupancy != 0){
+            return distance;
+        }
     }
     return search_limit;
 }
@@ -257,17 +285,53 @@ void Localizer::normalize_weight()
     for(const auto &p : particles_)
     {
         alpha_ += p.get_weight();
+        // ROS_INFO("alpha_: %f", alpha_);
     }
 
     for(auto &p : particles_)
     {
         double new_weight = p.get_weight() / alpha_;
         p.set_weight(new_weight);
+        // ROS_INFO("normalize_weight: %f", new_weight);
     }
 }
 
-//パーティクルの現在の位置を決める関数
-void Localizer::estimate_pose()
+//パーティクルの現在の位置を決める関数（中央値）
+void Localizer::median_pose()
+{
+    std::vector<double> x_list;
+    std::vector<double> y_list;
+    std::vector<double> yaw_list;
+
+    for(const auto& p : particles_)
+    {
+        x_list.push_back(p.get_pose_x());
+        y_list.push_back(p.get_pose_y());
+        yaw_list.push_back(p.get_pose_yaw());
+    }
+
+    const double x_median = get_median(x_list);
+    const double y_median = get_median(y_list);
+    const double yaw_median = get_median(yaw_list);
+    estimated_pose_.set_pose(x_median, y_median, yaw_median);
+}
+
+//中央値を得る関数
+double Localizer::get_median(std::vector<double>& data)
+{
+    sort(begin(data), end(data));
+    if(data.size()%2 == 1)
+    {
+        return data[(data.size()-1) / 2];
+    }
+    else
+    {
+        return (data[data.size()/2 - 1] + data[data.size()/2]) / 2.0;
+    }
+}
+
+//パーティクルの現在の位置を決める関数（加重平均）
+void Localizer::weighted_mean_pose()
 {
     double x = 0.0;
     double y = 0.0;
@@ -305,9 +369,9 @@ void Localizer::expansion_reset()
 {
     for(int i=0; i<particle_num_; i++)
     {
-        double x = set_noise(particles_[i].get_pose_x(), expansion_reset_dev_);
-        double y = set_noise(particles_[i].get_pose_y(), expansion_reset_dev_);
-        double yaw = set_noise(particles_[i].get_pose_yaw(), expansion_reset_dev_);
+        double x = set_noise(particles_[i].get_pose_x(), expansion_reset_x_dev_);
+        double y = set_noise(particles_[i].get_pose_y(), expansion_reset_y_dev_);
+        double yaw = set_noise(particles_[i].get_pose_yaw(), expansion_reset_yaw_dev_);
         particles_[i].set_pose(x, y, yaw);
     }
 
@@ -322,51 +386,89 @@ void Localizer::reset_weight()
     }
 }
 
-//リサンプリングをする関数
+//MCLのリサンプリング（系統リサンプリング）をする関数
 void Localizer::resampling()
 {
-    std::vector<Particle> new_particles;
-    new_particles.reserve(particle_num_);
-
-    std::uniform_int_distribution<> int_dist(0,particle_num_-1);
-    std::uniform_real_distribution<> double_dist(0.0,get_max_weight()*2.0);
-
-    alpha_slow_ += alpha_slow_th_ * (alpha_ - alpha_slow_);
-    alpha_fast_ += alpha_fast_th_ * (alpha_ - alpha_fast_);
-
-    num_replace_ = (int) (particle_num_ * std::max( 0.0, 1.0 - alpha_fast_ / alpha_slow_));
-
-    int index = int_dist(engine);
-    double beta = 0.0;
-
-    for(int i=0; i<particle_num_; i++)
+    std::vector<double> ws;
+    ws.push_back(particles_[0].get_weight());
+    for(int i=1; i<particles_.size(); i++)
     {
-        if(new_particles.size() < num_replace_)
-        {
-            double x = set_noise(estimated_pose_.get_pose_x(), resampling_reset_dev_);
-            double y = set_noise(estimated_pose_.get_pose_y(), resampling_reset_dev_);
-            double yaw = set_noise(estimated_pose_.get_pose_yaw(), resampling_reset_dev_);
-            Particle p(x, y, yaw);
-            new_particles.push_back(p);
-        }
-
-        else
-        {
-            beta += double_dist(engine);
-
-            while(beta > particles_[index].get_weight())
-            {
-                beta -= particles_[index].get_weight();
-                index = (index+1) % particle_num_;
-            }
-
-            new_particles.push_back(particles_[index]);
-        }
+        ws.push_back(ws.back() + particles_[i].get_weight());
     }
 
-    particles_ = new_particles;
+    const std::vector<Particle> old(particles_);
+    const double step = ws.back() / particles_.size();
+    const double start = (double)rand() / RAND_MAX * step;
+
+    std::vector<int> chosen_indexes;
+    int tick = 0;
+    for(int i=0; i<particles_.size(); i++)
+    {
+        while(ws[tick] <= start + i*step)
+        {
+            tick++;
+            if(tick == particles_.size())
+            {
+                ROS_ERROR("Resampling Failed");
+                exit(1);
+            }
+        }
+        chosen_indexes.push_back(tick);
+    }
+
+    for(int i=0; i<particles_.size(); i++)
+    {
+        particles_[i] = old[chosen_indexes[i]];
+    }
+
     reset_weight();
 }
+
+//AMCLのリサンプリングをする関数
+// void Localizer::AMCL_resampling()
+// {
+//     std::vector<Particle> new_particles;
+//     new_particles.reserve(particle_num_);
+//
+//     std::uniform_int_distribution<> int_dist(0,particle_num_-1);
+//     std::uniform_real_distribution<> double_dist(0.0,get_max_weight()*2.0);
+//
+//     alpha_slow_ += alpha_slow_th_ * (alpha_ - alpha_slow_);
+//     alpha_fast_ += alpha_fast_th_ * (alpha_ - alpha_fast_);
+//
+//     num_replace_ = (int) (particle_num_ * std::max( 0.0, 1.0 - alpha_fast_ / alpha_slow_));
+//
+//     int index = int_dist(engine);
+//     double beta = 0.0;
+//
+//     for(int i=0; i<particle_num_; i++)
+//     {
+//         if(new_particles.size() < num_replace_)
+//         {
+//             double x = set_noise(estimated_pose_.get_pose_x(), resampling_reset_x_dev_);
+//             double y = set_noise(estimated_pose_.get_pose_y(), resampling_reset_y_dev_);
+//             double yaw = set_noise(estimated_pose_.get_pose_yaw(), resampling_reset_yaw_dev_);
+//             Particle p(x, y, yaw);
+//             new_particles.push_back(p);
+//         }
+//
+//         else
+//         {
+//             beta += double_dist(engine);
+//
+//             while(beta > particles_[index].get_weight())
+//             {
+//                 beta -= particles_[index].get_weight();
+//                 index = (index+1) % particle_num_;
+//             }
+//
+//             new_particles.push_back(particles_[index]);
+//         }
+//     }
+//
+//     particles_ = new_particles;
+//     reset_weight();
+// }
 
 
 void Localizer::publish_particles()
@@ -433,6 +535,7 @@ void Localizer::broadcast_roomba_state()
     roomba_state.transform.rotation = roomba_state_q;
 
     roomba_state_broadcaster_.sendTransform(roomba_state);
+    ROS_INFO("localizer_broadcast:%f", tf2::getYaw(roomba_state.transform.rotation));
 }
 
 
@@ -448,6 +551,7 @@ void Localizer::process()
             {
                 initialize();
                 init_request_flag_ = false;
+
             }
 
             if(moving_flag_)
@@ -459,14 +563,14 @@ void Localizer::process()
             publish_particles();
             publish_estimated_pose();
 
-            try
-            {
-                broadcast_roomba_state();
-            }
-            catch(tf::TransformException &ex)
-            {
-                ROS_ERROR("%s", ex.what());
-            }
+            // try
+            // {
+            //     broadcast_roomba_state();
+            // }
+            // catch(tf::TransformException &ex)
+            // {
+            //     ROS_ERROR("%s", ex.what());
+            // }
         }
 
 
