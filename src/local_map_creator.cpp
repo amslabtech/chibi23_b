@@ -109,7 +109,6 @@ void LocalMapCreator::process()
         if(is_obs_poses_checker_)
         {
             ROS_INFO("map_reso_:%f", map_reso_);
-            ROS_INFO("map_size_:%f", map_size_);
             update_map();
         }
         ros::spinOnce();
