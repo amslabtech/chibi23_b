@@ -49,6 +49,8 @@ class Localizer
         void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
         void laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg);
 
+        void measuring_distance();
+
         double set_noise(double mu, double dev);
         double optimize_angle(double angle);
 
@@ -63,11 +65,14 @@ class Localizer
         int get_map_occupancy(double x, double y);
         double likelihood(double x, double mu, double dev);
         void normalize_weight();
-        void estimate_pose();
+        void weighted_mean_pose();
+        void median_pose();
+        double get_median(std::vector<double>&data);
         double get_max_weight();
         void expansion_reset();
         void reset_weight();
         void resampling();
+        void AMCL_resampling();
 
         void publish_particles();
         void publish_estimated_pose();
@@ -87,11 +92,18 @@ class Localizer
         double laser_distance_dev_;
         double alpha_th_;
         double expansion_limit_;
-        double expansion_reset_dev_;
+        double expansion_reset_x_dev_;
+        double expansion_reset_y_dev_;
+        double expansion_reset_yaw_dev_;
         double alpha_slow_th_;
         double alpha_fast_th_;
-        double resampling_reset_dev_;
+        double resampling_reset_x_dev_;
+        double resampling_reset_y_dev_;
+        double resampling_reset_yaw_dev_;
 
+        double origin_distance_;
+
+        int moving_count_ = 0;
         int expansion_count_ = 0;
         double alpha_ = 0.0;
         double alpha_slow_ = 0.0;
@@ -125,6 +137,7 @@ class Localizer
 
         nav_msgs::Odometry current_odometry_;
         nav_msgs::Odometry previous_odometry_;
+        nav_msgs::Odometry origin_odometry_;
         nav_msgs::OccupancyGrid map_;
 
         sensor_msgs::LaserScan laser_;
