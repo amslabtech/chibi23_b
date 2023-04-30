@@ -11,6 +11,7 @@ Astar::Astar():private_nh_("~")
 
     global_path_.header.frame_id  = "map";
     current_node_.header.frame_id = "map";
+    new_map_.header.frame_id = "map";
 
     global_path_.poses.reserve(2000);
 
@@ -39,6 +40,8 @@ void Astar::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg)  //マッ
 
 void Astar::obs_expander()
 {
+    ROS_INFO("obs_expander is runnning...");
+    sleep(2);
     new_map_ = map_;
     int grid_size = new_map_.data.size();
     for(int i=0;i<grid_size;i++)
@@ -367,13 +370,6 @@ void Astar::planning()  //経路計画
                 update_list(min_node);
             }
         }
-    }
-    if(test_show_)
-        std::cout << "いきますよん" << std::endl;
-    else
-    {
-        std::cout << "まちますよん" << std::endl;
-        sleep(2);
     }
     pub_path_.publish(global_path_);
     show_exe_time();
