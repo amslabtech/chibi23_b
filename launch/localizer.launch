@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 
 <launch>
+    <rosparam param="/use_sim_time">true</rosparam>
     <!-- yaml file path-->
     <arg name="map_file" default="$(find chibi23_b)/map/map.yaml"/>
     <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)" output="screen"/>
