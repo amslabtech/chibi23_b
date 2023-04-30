@@ -46,12 +46,13 @@ void Astar::obs_expander()
     int grid_size = new_map_.data.size();
     for(int i=0;i<grid_size;i++)
     {
-        if(new_map_.data[i] == 50)
+        if(new_map_.data[i] == 100)
         {
             obs_expand(i);
         }
     }
     pub_new_map_.publish(new_map_);
+    // ROS_INFO("obs_expander is ended...");
 }
 
 void Astar::obs_expand(const int index)
@@ -64,7 +65,7 @@ void Astar::obs_expand(const int index)
         for(int j=-margin_length;j<margin_length;j++)
         {
             int grid_index = ((index_x + i) + ((index_y +j)*resolution_));
-            new_map_.data[grid_index] = 50;
+            new_map_.data[grid_index] = 90;
         }
     }
 }
@@ -105,7 +106,7 @@ int Astar::check_list(const Node target_node, std::vector<Node>& set)  //リス�
 bool Astar::check_obs(const Node node)  //壁の確認
 {
     const int grid_index = node.x + (node.y * width_);
-    return new_map_.data[grid_index] == 50;
+    return new_map_.data[grid_index] == 90;
 }
 
 void Astar::swap_node(const Node node, std::vector<Node>& list1, std::vector<Node>& list2)  //リスト間のノードの移動
@@ -294,6 +295,7 @@ void Astar::create_path(Node node)  //パスの作成
             if(check_parent(i,node))
             {
                 node = close_list_[i];
+                show_node_point(node);
                 partial_path.poses.push_back(node_to_pose(node));
                 break;
             }
@@ -343,8 +345,8 @@ int Astar::search_node_from_list(const Node node, std::vector<Node>& list)  //�
 void Astar::planning()  //経路計画
 {
     begin_ = ros::Time::now();
-    const int total_phase = 9;
-    for(int phase=0;phase<total_phase;phase++)
+    const int total_phase = 5;
+    for(int phase=0;phase<=total_phase;phase++)
     {
         open_list_.clear();
         close_list_.clear();
@@ -380,6 +382,7 @@ void Astar::planning()  //経路計画
 void Astar::process()  //メイン関数で実行する関数
 {
     ROS_INFO("process is starting...");
+    sleep(5);
     ros::Rate loop_rate(hz_);
 
     while(ros::ok())
