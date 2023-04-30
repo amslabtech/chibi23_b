@@ -2,9 +2,9 @@
 
 LocalGoalCreator::LocalGoalCreator():private_nh_("~")
 {
-    private_nh_.param("hz", hz_, {10});
-    private_nh_.param("goal_index", goal_index_, {50});
-    private_nh_.param("local_goal_dist", local_goal_dist_, {1});
+    private_nh_.getParam("hz", hz_);
+    private_nh_.getParam("goal_index", goal_index_);
+    private_nh_.getParam("local_goal_dist", local_goal_dist_);
 
     global_path_sub_ = nh_.subscribe("/global_path", 1, &LocalGoalCreator::global_path_callback, this);
     current_pose_sub_ = nh_.subscribe("/estimated_pose", 10, &LocalGoalCreator::current_pose_callback, this);
@@ -38,14 +38,16 @@ void LocalGoalCreator::make_local_goal()
 
     if(distance < local_goal_dist_) // 設定したゴールの値の範囲内に入っていれば
     {
-        goal_index_ += 3;  //goal位置を、callback関数で受け取った時よりも少し先へ移動させる
+        goal_index_ += 3;  //配列のインデックスをcallback関数で受け取った時よりも少し先へ移動させる
 
+        //ゴールの座標を更新
         if(goal_index_ < global_path_.poses.size())
         {
             local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;
             local_goal_.point.y = global_path_.poses[goal_index_].pose.position.y;
+            ROS_INFO("goal_update");
         }
-        else
+        else //global_path_の配列のサイズを超えた場合、配列の最後の値をゴールとする
         {
             goal_index_ = global_path_.poses.size() -1;
             local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;

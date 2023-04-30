@@ -2,10 +2,9 @@
 
 ObstacleDetector::ObstacleDetector():private_nh_("~")
 {
-    private_nh_.param("hz", hz_, {10});
-    private_nh_.param("laser_step", laser_step_, {3});
-    private_nh_.param("ignore_dist", ignore_dist_, {0.01});
-    private_nh_.getParam("ignore_angle_range_list", ignore_angle_range_list_);
+    private_nh_.getParam("hz", hz_);
+    private_nh_.getParam("laser_step", laser_step_);
+    private_nh_.getParam("ignore_dist", ignore_dist_);
 
     obs_poses_.header.frame_id = "base_link";
 
@@ -14,33 +13,36 @@ ObstacleDetector::ObstacleDetector():private_nh_("~")
     pub_obs_poses_ = nh_.advertise<geometry_msgs::PoseArray>("/local_map/obstacle", 1);
 }
 
+//レーザーの値のコールバック
 void ObstacleDetector::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
     laser_ = *msg;
     is_laser_checker = true;
 }
 
+//障害物の検知
 void ObstacleDetector::scan_obstacle()
 {
     obs_poses_.poses.clear();
 
     for(int i=0; i<laser_.ranges.size(); i+=laser_step_)
     {
-        const double angle = i * laser_.angle_increment + laser_.angle_min;
-        double dist  = laser_.ranges[i];
+        const double angle = i * laser_.angle_increment + laser_.angle_min; //角度
+        double dist  = laser_.ranges[i]; //直線距離
 
-        int index_incr = i;
-        int index_decr = i;
-        while(dist <= ignore_dist_)
+        //レーザーの外れ値を無視
+        if(dist <= ignore_dist_)
         {
-            if(index_incr++ < laser_.ranges.size())
-                dist = laser_.ranges[index_incr];
-            if(dist<=ignore_dist_ and 0<=index_decr--)
-                dist = laser_.ranges[index_decr];
+            continue;
         }
 
-        if(is_ignore_angle(angle)) continue;
+        //柱だった場合障害物としては認識しないようにする
+        if(is_ignore_angle(angle))
+        {
+            continue;
+        }
 
+        //障害物の座標を代入
         geometry_msgs::Pose obs_pose;
         obs_pose.position.x = dist * cos(angle);
         obs_pose.position.y = dist * sin(angle);
@@ -51,26 +53,27 @@ void ObstacleDetector::scan_obstacle()
     pub_obs_poses_.publish(obs_poses_);
 }
 
+//ルンバの柱の角度による処理
 bool ObstacleDetector::is_ignore_angle(double angle)
 {
-    angle = abs(angle);
-    const int size = ignore_angle_range_list_.size();
+    angle = abs(angle); //絶対値
 
-    for(int i=0; i<size/2; i++)
+    //柱の角度の領域の場合、trueを返す
+    if((angle > M_PI * 3/16) && (angle < M_PI * 5/16))
     {
-        if(ignore_angle_range_list_[i*2] < angle and angle < ignore_angle_range_list_[i*2 + 1])
-            return true;
+        return true;
     }
-
-    if(size%2 == 1)
+    else if(angle > M_PI * 11/16)
     {
-        if(ignore_angle_range_list_[size-1] < angle)
-            return true;
+        return true;
     }
-
-    return false;
+    else
+    {
+        return false;
+    }
 }
 
+//レーザーから値を受けとれていれば障害物の検知の実行
 void ObstacleDetector::process()
 {
     ros::Rate loop_rate(hz_);
