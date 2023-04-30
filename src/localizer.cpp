@@ -32,7 +32,8 @@ void Particle::set_weight(double weight)
 Localizer::Localizer():private_nh_("~")
 {
     private_nh_.getParam("hz", hz_);
-    private_nh_.getParam("particle_num",particle_num_);
+    private_nh_.getParam("particle_num", particle_num_);
+    private_nh_.getParam("origin_distance_value", origin_distance_value_);
     private_nh_.getParam("init_x", init_x_);
     private_nh_.getParam("init_y", init_y_);
     private_nh_.getParam("init_yaw", init_yaw_);
@@ -60,6 +61,7 @@ Localizer::Localizer():private_nh_("~")
 
     pub_estimated_pose_ = nh_.advertise<geometry_msgs::PoseStamped>("/estimated_pose", 1);
     pub_particle_cloud_ = nh_.advertise<geometry_msgs::PoseArray>("/particle_cloud", 1);
+    pub_laser_angle_ = nh_.advertise<sensor_msgs::LaserScan>("/laser_debug", 1);
 }
 
 //odometry,map,laserのコールdistバック関数
@@ -83,7 +85,7 @@ void Localizer::odometry_callback(const nav_msgs::Odometry::ConstPtr& msg)
 
     measuring_distance();
 
-    if(origin_distance_ > 1)
+    if(origin_distance_ > origin_distance_value_)
     {
         moving_flag_ = true;
     }
@@ -135,6 +137,16 @@ double Localizer::optimize_angle(double angle)
 //初期化処理を動かし方する関数
 void Localizer::initialize()
 {
+    // Particle p(init_x_, init_y_, init_yaw_);
+    // particles_.push_back(p);
+
+    // for(float i = -0.2; i<=0.2; i += 0.1){
+    //     for(float j = -0.2; j<=0.2; j += 0.1){
+    //         Particle p(init_x_+i, init_y_+j, init_yaw_);
+    //         particles_.push_back(p);
+    //     }
+    // }
+
     for(int i=0; i<particle_num_; i++)
     {
         double x = set_noise(init_x_, init_dev_);
@@ -156,6 +168,10 @@ void Localizer::motion_update()
 
     double distance = hypot(dx, dy);
     double direction = optimize_angle(atan2(dy, dx) - pre_yaw);
+
+
+    double dt = (current_odometry_.header.stamp - previous_odometry_.header.stamp).toSec();
+    // ROS_INFO("%f, %f, %f, %f", distance/dt, direction/dt, current_odometry_.twist.twist.linear.x, current_odometry_.twist.twist.angular.z);
 
     for(auto& p : particles_){
         move(p, distance, direction, dyaw);
@@ -182,29 +198,35 @@ void Localizer::measurement_update()
     for(auto &p : particles_)
     {
         double new_weight = calculate_weight(p);
+        // ROS_INFO("%d w:%f", __LINE__, new_weight);
         p.set_weight(new_weight);
     }
 
     normalize_weight();
+    // for(auto &p : particles_)
+    // {
+        // ROS_INFO("w: %f", p.get_weight());
+    // }
 
     //alpha_mean = 各パーティクルのlaser×1の重み（一様）
-    double alpha_mean = alpha_ / (laser_.ranges.size() / laser_step_ * particle_num_);
+    double alpha_mean = sum_weight() / (laser_.ranges.size() / laser_step_ * particle_num_);
 
-    // ROS_INFO_STREAM("alpha_: "<<alpha_<<" alpha_mean: "<<alpha_mean);
+    // ROS_INFO_STREAM("alpha_: "<<alpha_<<" alpha_mean: "<<alpha_mean<<" laser_step_:"<<laser_step_<<" laser_.ranges.size():"<<laser_.ranges.size()<<" particle_num_:"<<particle_num_);
+    // ROS_INFO_STREAM(" alpha_mean: "<<alpha_mean);
 
     if(alpha_mean < alpha_th_ && expansion_count_ < expansion_limit_)
     {
         median_pose();
         expansion_count_ ++;
         expansion_reset();
-        ROS_INFO("expansion reset");
+    //     ROS_INFO("expansion reset");
     }
     else
     {
-        weighted_mean_pose();
+        estimated_pose();
         expansion_count_ = 0;
         resampling();
-        ROS_INFO("resampling");
+        // ROS_INFO("resampling");
     }
 }
 
@@ -216,20 +238,38 @@ double Localizer::calculate_weight(Particle& p)
     double angle_step = laser_.angle_increment;
     int limit = laser_.ranges.size();
 
+    sensor_msgs::LaserScan laser_debug;
+    laser_debug = laser_;
+
     for(int i=0; i < limit; i += laser_step_)
     {
+        laser_debug.ranges[i] = 0;
         if(laser_.ranges[i] > laser_ignore_range_)
         {
             double map_distance = distance_on_map(p.get_pose_x(), p.get_pose_y(), angle);
-
+            // if(i == 900)
+            // {
+            //     ROS_INFO("p.get_pose_x(): %f, p.get_pose_y(): %f, map_distance: %f", p.get_pose_x(), p.get_pose_y(), map_distance);
+            // }
+            laser_debug.ranges[i] = map_distance;
+            // if(!(i%100)){
+                    // ROS_INFO("map_distance: %f, laser_.ranges: %f", map_distance, laser_.ranges[i]);
+            // }
             double sigma = laser_.ranges[i] * laser_distance_dev_;
-
+            // weight += pow(laser_.ranges[i] - map_distance, 2);
+            // weight += likelihood(laser_.ranges[i], laser_.ranges[i], sigma);
             weight += likelihood(map_distance, laser_.ranges[i], sigma);
+            // ROS_INFO("sigma: %f, weight: %f, map_distance: %f", sigma, weight, map_distance);
         }
 
         angle = optimize_angle(angle + angle_step * laser_step_);
     }
-    // ROS_INFO("weight: %f", weight);
+    // pub_laser_angle_.publish(laser_debug);
+
+    // ROS_INFO("weight_ : %f", weight);
+    // weight = exp(-weight / 3.0 / 2.0);
+    // normalize_weight();
+    // ROS_INFO("p.get_pose_x(): %f, p.get_pose_y(): %f, weight: %f", p.get_pose_x(), p.get_pose_y(), weight);
     return weight;
 }
 
@@ -270,10 +310,10 @@ int Localizer::get_map_occupancy(double x, double y)
     return occupancy;
 }
 
-//確率密度関数を用いて重みを決める関数
+//正規分布を用いて重みを決める関数
 double Localizer::likelihood(double x, double mu, double dev)
 {
-    double ans = exp( - pow(x - mu, 2) / (2.0 * pow(dev, 2)) ) / ( sqrt( 2.0 * M_PI ) * dev );
+    double ans = exp(-pow(x-mu, 2)/(2*dev*dev)); // / ( sqrt( 2.0 * M_PI ) * dev );
 
     return ans;
 }
@@ -281,22 +321,47 @@ double Localizer::likelihood(double x, double mu, double dev)
 //重みの正規化を行う関数
 void Localizer::normalize_weight()
 {
-    alpha_ = 0.0;
-    for(const auto &p : particles_)
-    {
-        alpha_ += p.get_weight();
-        // ROS_INFO("alpha_: %f", alpha_);
-    }
-
+    double sum = sum_weight();
     for(auto &p : particles_)
     {
-        double new_weight = p.get_weight() / alpha_;
-        p.set_weight(new_weight);
+        double new_weight = 0.0;
+        if(sum > 1e-6)
+        {
+            new_weight = p.get_weight() / sum;
+            p.set_weight(new_weight);
+            // ROS_INFO("%d w:%f", __LINE__, new_weight);
+        }
+        else
+        {
+            new_weight = 1.0 / (float)particle_num_;
+            p.set_weight(new_weight);
+            // ROS_INFO("%d w:%f", __LINE__, new_weight);
+        }
         // ROS_INFO("normalize_weight: %f", new_weight);
     }
 }
 
-//パーティクルの現在の位置を決める関数（中央値）
+//重みの合計値を計算する関数
+double Localizer::sum_weight()
+{
+    double alpha = 0.0;
+    for(const auto &p : particles_)
+    {
+        alpha += p.get_weight();
+    }
+    return alpha;
+}
+
+//リサンプリング前に用いる位置推定関数を決める関数
+void Localizer::estimated_pose()
+{
+    // median_pose();
+    mean_pose();
+    // weighted_mean_pose();
+    }
+
+
+//パーティクルの現在の位置を中央値で得る関数
 void Localizer::median_pose()
 {
     std::vector<double> x_list;
@@ -330,7 +395,30 @@ double Localizer::get_median(std::vector<double>& data)
     }
 }
 
-//パーティクルの現在の位置を決める関数（加重平均）
+//パーティクルの現在の位置を平均値で得る関数
+void Localizer::mean_pose()
+{
+    double x_sum = 0.0;
+    double y_sum = 0.0;
+    double yaw_sum = 0.0;
+
+    for(const auto& p : particles_)
+    {
+        x_sum += p.get_pose_x();
+        y_sum += p.get_pose_y();
+        yaw_sum += p.get_pose_yaw();
+    }
+
+    double x_mean = x_sum / particles_.size();
+    double y_mean = y_sum / particles_.size();
+    double yaw_mean = yaw_sum / particles_.size();
+
+    double yaw_mean_optimize = optimize_angle(yaw_mean);
+
+    estimated_pose_.set_pose(x_sum, y_sum, yaw_mean_optimize);
+}
+
+//パーティクルの現在の位置を加重平均で決める関数
 void Localizer::weighted_mean_pose()
 {
     double x = 0.0;
@@ -382,7 +470,9 @@ void Localizer::expansion_reset()
 void Localizer::reset_weight()
 {
     for(auto &p : particles_){
-        p.set_weight(1.0/particles_.size());
+        double new_weight = 1.0 / (float)particles_.size();
+        p.set_weight(new_weight);
+        // ROS_INFO("%d w:%f", __LINE__, new_weight);
     }
 }
 
@@ -535,7 +625,7 @@ void Localizer::broadcast_roomba_state()
     roomba_state.transform.rotation = roomba_state_q;
 
     roomba_state_broadcaster_.sendTransform(roomba_state);
-    ROS_INFO("localizer_broadcast:%f", tf2::getYaw(roomba_state.transform.rotation));
+    // ROS_INFO("localizer_broadcast:%f", tf2::getYaw(roomba_state.transform.rotation));
 }
 
 
