@@ -652,14 +652,14 @@ void Localizer::process()
             publish_particles();
             publish_estimated_pose();
 
-            // try
-            // {
-            //     broadcast_roomba_state();
-            // }
-            // catch(tf::TransformException &ex)
-            // {
-            //     ROS_ERROR("%s", ex.what());
-            // }
+            try
+            {
+                broadcast_roomba_state();
+            }
+            catch(tf::TransformException &ex)
+            {
+                ROS_ERROR("%s", ex.what());
+            }
         }
 
 
