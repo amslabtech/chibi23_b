@@ -35,9 +35,21 @@ DWA::DWA():private_nh_("~")
 
 void DWA::local_goal_callback(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
-    local_goal_=*msg;
-    ROS_INFO("local_goal:OK");
-    flag_local_goal_ = true;
+    geometry_msgs::TransformStamped transform;
+    //transform = tf_buffer_.lookupTransform("base_link", "map", ros::Time(0));
+    //flag_local_goal_ = true;
+    try
+    {
+        transform = tf_buffer_.lookupTransform("base_link", "map", ros::Time(0));
+        flag_local_goal_ = true;
+    }
+    catch(tf2::TransformException& ex)
+    {
+        ROS_WARN("%s", ex.what());
+        flag_local_goal_ = false;
+        return;
+    }
+    tf2::doTransform(*msg, local_goal_, transform);
 }
 
 void DWA::obstacle_poses_callback(const geometry_msgs::PoseArray::ConstPtr& msg)
@@ -68,7 +80,10 @@ void DWA::calc_dynamic_window()
 {
     double Vs[] = {min_vel_,max_vel_,-max_yawrate_,max_yawrate_};
 
-    double Vd[] = {roomba_.velocity - max_accel_*dt_,roomba_.velocity + max_accel_*dt_,roomba_.yawrate  - max_dyawrate_*dt_,roomba_.yawrate  + max_dyawrate_*dt_};
+    double Vd[] = {roomba_.velocity - max_accel_*dt_,
+        roomba_.velocity + max_accel_*dt_,
+        roomba_.yawrate  - max_dyawrate_*dt_,
+        roomba_.yawrate  + max_dyawrate_*dt_};
 
     dw_.min_vel = std::max(Vs[0], Vd[0]);
     dw_.max_vel = std::min(Vs[1], Vd[1]);
@@ -156,7 +171,7 @@ std::vector<double> DWA::calc_input()
 
     calc_dynamic_window();
 
-    double max_score = -1000.0;
+    double max_score = -1e6;
     int max_score_index = 0;
 
 
