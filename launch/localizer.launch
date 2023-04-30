@@ -13,6 +13,6 @@
         <!-- <remap from="estimated_pose" to="estimated_pose_2"/> -->
     </node>
     <node pkg="rviz" type="rviz" name="rviz" args="-d $(find chibi23_b)/config/rviz/localizer_1.rviz"/>
-    <node pkg="rosbag" name="bag" type="play" args="--clock $(env HOME)/team_B_map/sds_kimi2_2023-04-27-12-31-40.bag"/>
+    <node pkg="rosbag" name="bag" type="play" args="--clock $(env HOME)/team_B_map/sds_kimi3_2023-04-30-19-58-56.bag"/>
     <node pkg="tf2_ros" type="static_transform_publisher" name="static_transform_publisher" args="0 0 0 0 0 0 1 /base_link /laser"/>
 </launch>
