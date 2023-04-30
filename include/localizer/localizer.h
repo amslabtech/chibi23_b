@@ -65,8 +65,11 @@ class Localizer
         int get_map_occupancy(double x, double y);
         double likelihood(double x, double mu, double dev);
         void normalize_weight();
-        void weighted_mean_pose();
+        double sum_weight();
+        void estimated_pose();
         void median_pose();
+        void mean_pose();
+        void weighted_mean_pose();
         double get_median(std::vector<double>&data);
         double get_max_weight();
         void expansion_reset();
@@ -80,6 +83,7 @@ class Localizer
 
         int hz_;
         int particle_num_;
+        double origin_distance_value_;
         double init_x_;
         double init_y_;
         double init_yaw_;
@@ -105,7 +109,6 @@ class Localizer
 
         int moving_count_ = 0;
         int expansion_count_ = 0;
-        double alpha_ = 0.0;
         double alpha_slow_ = 0.0;
         double alpha_fast_ = 0.0;
         int num_replace_ = 0.0;
@@ -129,6 +132,7 @@ class Localizer
 
         ros::Publisher pub_estimated_pose_;
         ros::Publisher pub_particle_cloud_;
+        ros::Publisher pub_laser_angle_;
 
         tf::TransformBroadcaster roomba_state_broadcaster_;
 
