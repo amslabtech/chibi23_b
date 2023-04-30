@@ -1,23 +1,28 @@
 
-hz: 10                      #制御周波数
-particle_num: 100           #パーティクル数
+hz: 10                         #制御周波数
+particle_num: 600              #パーティクル数
+origin_distance_value: 0.1     #動作更新を発動する距離 (m)
 
 #初期位置
 init_x: 0.0
 init_y: 0.0
 init_yaw: 0.0
 
-init_dev: 0.40              # 初期位置のばらつき
-move_distance_dev: 0.25     # 1m の並進に対する距離のばらつき (m)
-move_direction_dev: 0.25    # 1rad 回転に対する角度のばらつき (rad)
-move_rotation_dev: 0.25     # 1rad 回転に対する角度のばらつき (rad)
-laser_step: 20              # 参照するレーザの間隔
-laser_ignore_range: 0.20    # 参照から除外するレーザの距離 (m)
-laser_distance_dev: 0.10    # レーザ 1m に対する距離のばらつき (m)
-alpha_th: 0.80              # 膨張リセットを発動する全体尤度の閾値
-expansion_limit: 30         # 膨張リセットの連続回数上限
-expansion_reset_dev: 0.02   # 膨張リセット時のばらつき
-alpha_slow_th: 0.001        # リサンプリングリセットを発動する閾値
-alpha_fast_th: 0.1          # slow, fast の差が小さいほど発動しやすい
-resampling_reset_dev: 0.25  # リサンプリング時にかけるリセットのばらつき
+init_dev: 0.5                  # 初期位置のばらつき
+move_distance_dev: 0.5         # 1m の並進に対する距離のばらつき (m)
+move_direction_dev: 0.3        # 1rad 回転に対する角度のばらつき (rad)
+move_rotation_dev: 0.25        # 1rad 回転に対する角度のばらつき (rad)
+laser_step: 20                 # 参照するレーザの間隔
+laser_ignore_range: 0.20       # 参照から除外するレーザの距離 (m)
+laser_distance_dev: 0.03       # レーザ 1m に対する距離のばらつき (m)
+alpha_th: 0.2                  # 膨張リセットを発動する全体尤度の閾値
+expansion_limit: 5             # 膨張リセットの連続回数上限
+expansion_reset_x_dev: 0.1     # 膨張リセット時のばらつき
+expansion_reset_y_dev: 0.1     # 膨張リセット時のばらつき
+expansion_reset_yaw_dev: 0.1   # 膨張リセット時のばらつき
+alpha_slow_th: 0.001           # リサンプリングリセットを発動する閾値
+alpha_fast_th: 0.1             # slow, fast の差が小さいほど発動しやすい
+resampling_reset_x_dev: 0.0    # リサンプリング時にかけるリセットのばらつき (m)
+resampling_reset_y_dev: 0.0    # リサンプリング時にかけるリセットのばらつき (m)
+resampling_reset_yaw_dev: 0.0  # リサンプリング時にかけるリセットのばらつき (rad)
 
