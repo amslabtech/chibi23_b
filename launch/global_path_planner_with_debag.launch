@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <launch>
     <!-- config file path  -->
-    <arg name="rviz_settings" default="$(find chibi23_b)/config/rviz/chibi23_b.rviz"/>
+    <arg name="rviz_settings" default="$(find chibi23_b)/config/rviz/chibi23_b_with_debag.rviz"/>
     <arg name="map_settings" default="$(find chibi23_b)/map/map.yaml"/>
-    <arg name="global_path_planner_settings" default="$(find chibi23_b)/config/param/global_path_planner.yaml"/>
+    <arg name="global_path_planner_settings" default="$(find chibi23_b)/config/param/global_path_planner_with_debag.yaml"/>
 
     <!-- node launch -->
     <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_settings)"/>

@@ -2,7 +2,7 @@
 hz: 10
 
 # デバッグ用
-test_show: false
+test_show: true
 sleep_time: 0.005
 
 # 経由点

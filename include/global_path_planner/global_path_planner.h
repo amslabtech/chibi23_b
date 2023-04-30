@@ -33,6 +33,8 @@ public:
 
 private:
     void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& mag);  //マップの読み込み
+    void obs_expander();
+    void obs_expand(const int index);
     void swap_node(const Node node, std::vector<Node>& list1,std::vector<Node>& list2);  //リスト間の移動
     void show_node_point(const Node node);  //ノードの表示
     void show_path(nav_msgs::Path& current_path);  //パスの表示
@@ -52,6 +54,7 @@ private:
 
     double make_heuristic(const Node node);  //ヒューリスティック関数の取得
     double sleep_time_;
+    double margin_;
     int check_list(const Node target_node, std::vector<Node>& set);  //リストの中を検索
     int search_node_from_list(const Node node, std::vector<Node>& list);  //リストの中を検索
     Node set_way_point(const int phase);  //経由点の取得
@@ -91,9 +94,11 @@ private:
     ros::Publisher pub_path_;
     ros::Publisher pub_node_point_;
     ros::Publisher pub_current_path_;
+    ros::Publisher pub_new_map_;
 
     nav_msgs::Path global_path_;
     nav_msgs::OccupancyGrid map_;
+    nav_msgs::OccupancyGrid new_map_;
     geometry_msgs::PointStamped current_node_;
 };
 #endif
