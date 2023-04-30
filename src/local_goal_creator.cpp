@@ -38,15 +38,16 @@ void LocalGoalCreator::make_local_goal()
 
     if(distance < local_goal_dist_) // 設定したゴールの値の範囲内に入っていれば
     {
-        goal_index_ += 3;  //goal位置を、callback関数で受け取った時よりも少し先へ移動させる
+        goal_index_ += 3;  //配列のインデックスをcallback関数で受け取った時よりも少し先へ移動させる
 
+        //ゴールの座標を更新
         if(goal_index_ < global_path_.poses.size())
         {
             local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;
             local_goal_.point.y = global_path_.poses[goal_index_].pose.position.y;
             ROS_INFO("goal_update");
         }
-        else
+        else //global_path_の配列のサイズを超えた場合、配列の最後の値をゴールとする
         {
             goal_index_ = global_path_.poses.size() -1;
             local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;

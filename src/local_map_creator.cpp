@@ -2,9 +2,9 @@
 
 LocalMapCreator::LocalMapCreator():private_nh_("~")
 {
-    private_nh_.param("hz", hz_, {10});
-    private_nh_.param("map_size", map_size_, {4.0});
-    private_nh_.param("map_reso", map_reso_, {0.025});
+    private_nh_.param("hz", hz_);
+    private_nh_.param("map_size", map_size_);
+    private_nh_.param("map_reso", map_reso_);
 
     sub_obs_poses_ = nh_.subscribe("/local_map/obstacle", 1, &LocalMapCreator::obs_poses_callback, this);
 
@@ -55,10 +55,10 @@ void LocalMapCreator::update_map() //マップの更新
             local_map_.data[grid_index] = 0; //「空き」にする
         }
 
-        if(is_map_checker(obs_dist, obs_angle))
+        if(is_map_checker(obs_dist, obs_angle)) //マップ内に障害物がいる場合
         {
             const int grid_index = xy_grid_index(obs_x, obs_y);
-            local_map_.data[grid_index] = 100; //「占有」にす
+            local_map_.data[grid_index] = 100; //「占有」にする
         }
     }
 
@@ -109,7 +109,6 @@ void LocalMapCreator::process()
         if(is_obs_poses_checker_)
         {
             update_map();
-            ROS_INFO("update_map");
         }
         ros::spinOnce();
         loop_rate.sleep();
