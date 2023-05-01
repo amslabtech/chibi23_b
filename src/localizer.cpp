@@ -355,10 +355,10 @@ double Localizer::sum_weight()
 //リサンプリング前に用いる位置推定関数を決める関数
 void Localizer::estimated_pose()
 {
-    // median_pose();
-    mean_pose();
+    median_pose();
+    // mean_pose();
     // weighted_mean_pose();
-    }
+}
 
 
 //パーティクルの現在の位置を中央値で得る関数
@@ -476,8 +476,15 @@ void Localizer::reset_weight()
     }
 }
 
-//MCLのリサンプリング（系統リサンプリング）をする関数
+//リサンプリング関数を選ぶ関数
 void Localizer::resampling()
+{
+//    MCL_resampling();
+    AMCL_resampling();
+}
+
+//MCLのリサンプリング（系統リサンプリング）をする関数
+void Localizer::MCL_resampling()
 {
     std::vector<double> ws;
     ws.push_back(particles_[0].get_weight());
@@ -515,50 +522,50 @@ void Localizer::resampling()
 }
 
 //AMCLのリサンプリングをする関数
-// void Localizer::AMCL_resampling()
-// {
-//     std::vector<Particle> new_particles;
-//     new_particles.reserve(particle_num_);
-//
-//     std::uniform_int_distribution<> int_dist(0,particle_num_-1);
-//     std::uniform_real_distribution<> double_dist(0.0,get_max_weight()*2.0);
-//
-//     alpha_slow_ += alpha_slow_th_ * (alpha_ - alpha_slow_);
-//     alpha_fast_ += alpha_fast_th_ * (alpha_ - alpha_fast_);
-//
-//     num_replace_ = (int) (particle_num_ * std::max( 0.0, 1.0 - alpha_fast_ / alpha_slow_));
-//
-//     int index = int_dist(engine);
-//     double beta = 0.0;
-//
-//     for(int i=0; i<particle_num_; i++)
-//     {
-//         if(new_particles.size() < num_replace_)
-//         {
-//             double x = set_noise(estimated_pose_.get_pose_x(), resampling_reset_x_dev_);
-//             double y = set_noise(estimated_pose_.get_pose_y(), resampling_reset_y_dev_);
-//             double yaw = set_noise(estimated_pose_.get_pose_yaw(), resampling_reset_yaw_dev_);
-//             Particle p(x, y, yaw);
-//             new_particles.push_back(p);
-//         }
-//
-//         else
-//         {
-//             beta += double_dist(engine);
-//
-//             while(beta > particles_[index].get_weight())
-//             {
-//                 beta -= particles_[index].get_weight();
-//                 index = (index+1) % particle_num_;
-//             }
-//
-//             new_particles.push_back(particles_[index]);
-//         }
-//     }
-//
-//     particles_ = new_particles;
-//     reset_weight();
-// }
+void Localizer::AMCL_resampling()
+{
+    std::vector<Particle> new_particles;
+    new_particles.reserve(particle_num_);
+
+    std::uniform_int_distribution<> int_dist(0,particle_num_-1);
+    std::uniform_real_distribution<> double_dist(0.0,get_max_weight()*2.0);
+
+    alpha_slow_ += alpha_slow_th_ * (sum_weight() - alpha_slow_);
+    alpha_fast_ += alpha_fast_th_ * (sum_weight() - alpha_fast_);
+
+    num_replace_ = (int) (particle_num_ * std::max( 0.0, 1.0 - alpha_fast_ / alpha_slow_));
+
+    int index = int_dist(engine);
+    double beta = 0.0;
+
+    for(int i=0; i<particle_num_; i++)
+    {
+        if(new_particles.size() < num_replace_)
+        {
+            double x = set_noise(estimated_pose_.get_pose_x(), resampling_reset_x_dev_);
+            double y = set_noise(estimated_pose_.get_pose_y(), resampling_reset_y_dev_);
+            double yaw = set_noise(estimated_pose_.get_pose_yaw(), resampling_reset_yaw_dev_);
+            Particle p(x, y, yaw);
+            new_particles.push_back(p);
+        }
+
+        else
+        {
+            beta += double_dist(engine);
+
+            while(beta > particles_[index].get_weight())
+            {
+                beta -= particles_[index].get_weight();
+                index = (index+1) % particle_num_;
+            }
+
+            new_particles.push_back(particles_[index]);
+        }
+    }
+
+    particles_ = new_particles;
+    reset_weight();
+}
 
 
 void Localizer::publish_particles()
