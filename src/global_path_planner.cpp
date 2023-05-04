@@ -11,13 +11,12 @@ Astar::Astar():private_nh_("~")
 
     global_path_.header.frame_id  = "map";
     current_node_.header.frame_id = "map";
-    new_map_.header.frame_id = "map";
 
     global_path_.poses.reserve(2000);
 
     sub_map_ = nh_.subscribe("/map", 1, &Astar::map_callback, this);
     pub_path_ = nh_.advertise<nav_msgs::Path>("/global_path", 1);
-    pub_new_map_ = nh_.advertise<nav_msgs::OccupancyGrid>("/new_map",1);
+    pub_new_map_ = nh_.advertise<nav_msgs::OccupancyGrid>("/map/new_map",1);
     if(test_show_)
     {
         pub_current_path_ = nh_.advertise<nav_msgs::Path>("/current_path", 1);
@@ -34,25 +33,23 @@ void Astar::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg)  //マッ
     height_ = map_.info.height;
     width_ = map_.info.width;
     resolution_ = map_.info.resolution;
-    obs_expander();
     map_checker_ = true;
 }
 
 void Astar::obs_expander()
 {
     ROS_INFO("obs_expander is runnning...");
-    sleep(2);
+    sleep(1);
     new_map_ = map_;
     int grid_size = new_map_.data.size();
     for(int i=0;i<grid_size;i++)
     {
-        if(new_map_.data[i] == 100)
+        if(map_.data[i] == 100)
         {
             obs_expand(i);
         }
     }
     pub_new_map_.publish(new_map_);
-    // ROS_INFO("obs_expander is ended...");
 }
 
 void Astar::obs_expand(const int index)
@@ -64,8 +61,8 @@ void Astar::obs_expand(const int index)
     {
         for(int j=-margin_length;j<margin_length;j++)
         {
-            int grid_index = ((index_x + i) + ((index_y +j)*resolution_));
-            new_map_.data[grid_index] = 90;
+            int grid_index = (index_x + j) + ((index_y + i) * width_);
+            new_map_.data[grid_index] = 100;
         }
     }
 }
@@ -106,7 +103,7 @@ int Astar::check_list(const Node target_node, std::vector<Node>& set)  //リス�
 bool Astar::check_obs(const Node node)  //壁の確認
 {
     const int grid_index = node.x + (node.y * width_);
-    return new_map_.data[grid_index] == 90;
+    return new_map_.data[grid_index] == 100;
 }
 
 void Astar::swap_node(const Node node, std::vector<Node>& list1, std::vector<Node>& list2)  //リスト間のノードの移動
@@ -172,7 +169,6 @@ bool Astar::check_start(const Node node)  //あんたスタート？
 void Astar::update_list(const Node node)  //リストの更新
 {
     std::vector<Node> neighbors;
-    int count = 1;
 
     create_neighbors(node, neighbors);
 
@@ -211,7 +207,6 @@ void Astar::update_list(const Node node)  //リストの更新
                 open_list_.push_back(neighbor);
             }
         }
-        count++;
     }
 }
 
@@ -238,7 +233,7 @@ void Astar::get_motion(std::vector<Motion>& list)  //動きの取得
     list.push_back(motion(1,1,sqrt(2)));
     list.push_back(motion(1,-1,sqrt(2)));
     list.push_back(motion(-1,1,sqrt(2)));
-    list.push_back(motion(1,-1,sqrt(2)));
+    list.push_back(motion(-1,-1,sqrt(2)));
 }
 
 Motion Astar::motion(const int dx,const int dy,const int cost)  //もーしょん
@@ -345,8 +340,8 @@ int Astar::search_node_from_list(const Node node, std::vector<Node>& list)  //�
 void Astar::planning()  //経路計画
 {
     begin_ = ros::Time::now();
-    const int total_phase = 5;
-    for(int phase=0;phase<=total_phase;phase++)
+    const int total_phase = way_points_x_.size();
+    for(int phase=0;phase<total_phase-1;phase++)
     {
         open_list_.clear();
         close_list_.clear();
@@ -382,7 +377,6 @@ void Astar::planning()  //経路計画
 void Astar::process()  //メイン関数で実行する関数
 {
     ROS_INFO("process is starting...");
-    sleep(5);
     ros::Rate loop_rate(hz_);
 
     while(ros::ok())
@@ -390,7 +384,10 @@ void Astar::process()  //メイン関数で実行する関数
         if(!map_checker_)
             ROS_INFO("NOW LOADING...");
         else
+        {
+            obs_expander();
             planning();
+        }
         ros::spinOnce();
         loop_rate.sleep();
     }
