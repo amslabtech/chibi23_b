@@ -75,6 +75,7 @@ class Localizer
         void expansion_reset();
         void reset_weight();
         void resampling();
+        void MCL_resampling();
         void AMCL_resampling();
 
         void publish_particles();
