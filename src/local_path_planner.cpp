@@ -36,8 +36,6 @@ DWA::DWA():private_nh_("~")
 void DWA::local_goal_callback(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
     geometry_msgs::TransformStamped transform;
-    //transform = tf_buffer_.lookupTransform("base_link", "map", ros::Time(0));
-    //flag_local_goal_ = true;
     try
     {
         transform = tf_buffer_.lookupTransform("base_link", "map", ros::Time(0));
@@ -91,15 +89,16 @@ void DWA::calc_dynamic_window()
     dw_.max_yawrate = std::min(Vs[3], Vd[3]);
 }
 
-
 double DWA::calc_evaluation(const std::vector<State>& traj)
 {
-    const double heading_cost  = weight_heading_ * calc_heading_score(traj);
-    const double distance_cost = weight_distance_ * calc_dist_score(traj);
-    const double velocity_cost = weight_velocity_ * calc_vel_score(traj);
+    const double heading_score  = calc_heading_score(traj);
+    const double heading_cost  = weight_heading_ * heading_score;
+    const double distance_score = calc_dist_score(traj);
+    const double distance_cost = weight_distance_ * distance_score;
+    const double velocity_score = calc_vel_score(traj);
+    const double velocity_cost = weight_velocity_ * velocity_score;
 
-
-
+    ROS_INFO("heading:%f distance:%f velocity:%f",heading_score,distance_score,velocity_score);
     const double total_cost= heading_cost + distance_cost + velocity_cost;
     return total_cost;
 }
@@ -109,7 +108,7 @@ double DWA::calc_heading_score(const std::vector<State>& traj)
     const double theta = traj.back().yaw;
 
     const double goal_theta = atan2(local_goal_.point.y - traj.back().y, local_goal_.point.x - traj.back().x);
-
+    ROS_INFO("lg.y:%f traj.y:%f lg.x:%f traj.x:%f",local_goal_.point.y,traj.back().y,local_goal_.point.x,traj.back().x);
     double target_theta = 0.0;
 
     if(goal_theta > theta)
@@ -142,7 +141,6 @@ double DWA::calc_dist_score(const std::vector<State>& traj)
     }
     return min_dist/search_range_;
 }
-
 
 //verocity評価関数
 double DWA::calc_vel_score(const std::vector<State>& traj)
@@ -181,8 +179,9 @@ std::vector<double> DWA::calc_input()
         // if(velocity==0.0) continue;
         for(double yawrate=dw_.min_yawrate; yawrate<=dw_.max_yawrate; yawrate+=yawrate_reso_)
         {
+            if(velocity<vel_reso_*0.5 and abs(yawrate)<yawrate_reso_*2.0)
+                continue;
             const std::vector<State> trajectory = calc_trajectory(velocity, yawrate);
-
             double score = calc_evaluation(trajectory);
             trajectories.push_back(trajectory);
 
@@ -193,6 +192,7 @@ std::vector<double> DWA::calc_input()
                 input[1] = yawrate;
                 max_score_index = i;
             }
+            ROS_INFO("i:%d vel:%f yaw:%F score:%d",i,velocity,yawrate,score);
             i++;
         }
     }
@@ -213,7 +213,7 @@ std::vector<double> DWA::calc_input()
 
         }
     }
-    ROS_INFO("input:%f %f",input[0],input[1]);
+    ROS_INFO("input:%f %f  max_score_index:%d",input[0],input[1],max_score_index);
     return input;
 }
 
