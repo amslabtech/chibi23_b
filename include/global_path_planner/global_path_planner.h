@@ -33,10 +33,12 @@ public:
 
 private:
     void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& mag);  //マップの読み込み
+    void obs_expander();
+    void obs_expand(const int index);
     void swap_node(const Node node, std::vector<Node>& list1,std::vector<Node>& list2);  //リスト間の移動
     void show_node_point(const Node node);  //ノードの表示
     void show_path(nav_msgs::Path& current_path);  //パスの表示
-    void get_way_points(std::vector<std::vector<int>>& list);  //経由点の宣言
+    // void get_way_points(std::vector<std::vector<int>>& list);  //経由点の宣言
     void planning();  //経路計画
     void create_path(Node node);  //経路作成
     void update_list(const Node node);  //隣接ノードの更新
@@ -52,6 +54,7 @@ private:
 
     double make_heuristic(const Node node);  //ヒューリスティック関数の取得
     double sleep_time_;
+    double margin_;
     int check_list(const Node target_node, std::vector<Node>& set);  //リストの中を検索
     int search_node_from_list(const Node node, std::vector<Node>& list);  //リストの中を検索
     Node set_way_point(const int phase);  //経由点の取得
@@ -64,7 +67,8 @@ private:
 
     double origin_x_;  //原点のx座標
     double origin_y_;  //原点のy座標
-    std::vector<std::vector<int>> way_points_;  //経由点たち
+    std::vector<double> way_points_x_;  //経由点
+    std::vector<double> way_points_y_;  //経由点
 
     int hz_;  //周波数
     Node start_node_;  //開始位置
@@ -72,7 +76,7 @@ private:
     std::vector<Node> open_list_;  //opneリスト
     std::vector<Node> close_list_;  //closeリスト
 
-    bool   map_checker_;  //正しくマップはとれたかな
+    bool   map_checker_ = false;  //正しくマップはとれたかな
     bool   test_show_;  //デバッグしますか
 
     //map製作用
@@ -90,9 +94,11 @@ private:
     ros::Publisher pub_path_;
     ros::Publisher pub_node_point_;
     ros::Publisher pub_current_path_;
+    ros::Publisher pub_new_map_;
 
     nav_msgs::Path global_path_;
     nav_msgs::OccupancyGrid map_;
+    nav_msgs::OccupancyGrid new_map_;
     geometry_msgs::PointStamped current_node_;
 };
 #endif
