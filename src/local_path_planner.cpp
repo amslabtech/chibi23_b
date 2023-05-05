@@ -53,7 +53,7 @@ void DWA::local_goal_callback(const geometry_msgs::PointStamped::ConstPtr& msg)
 void DWA::obstacle_poses_callback(const geometry_msgs::PoseArray::ConstPtr& msg)
 {
     ob_poses_ = *msg;
-    ROS_INFO("ob:OK");
+    // ROS_INFO("ob:OK");
     flag_ob_poses_ = true;
 }
 
@@ -62,7 +62,7 @@ bool DWA::can_move()
 {
     if(!(flag_local_goal_ && flag_ob_poses_)) return false;
 
-    ROS_INFO("l_goal:%f",local_goal_.point.x);
+    // ROS_INFO("l_goal:%f",local_goal_.point.x);
     const double dx = local_goal_.point.x - roomba_.x;
     const double dy = local_goal_.point.y - roomba_.y;
     const double dist_to_goal = hypot(dx, dy);
@@ -98,7 +98,7 @@ double DWA::calc_evaluation(const std::vector<State>& traj)
     const double velocity_score = calc_vel_score(traj);
     const double velocity_cost = weight_velocity_ * velocity_score;
 
-    ROS_INFO("heading:%f distance:%f velocity:%f",heading_score,distance_score,velocity_score);
+    // ROS_INFO("heading:%f distance:%f velocity:%f",heading_score,distance_score,velocity_score);
     const double total_cost= heading_cost + distance_cost + velocity_cost;
     return total_cost;
 }
@@ -108,7 +108,7 @@ double DWA::calc_heading_score(const std::vector<State>& traj)
     const double theta = traj.back().yaw;
 
     const double goal_theta = atan2(local_goal_.point.y - traj.back().y, local_goal_.point.x - traj.back().x);
-    ROS_INFO("lg.y:%f traj.y:%f lg.x:%f traj.x:%f",local_goal_.point.y,traj.back().y,local_goal_.point.x,traj.back().x);
+    // ROS_INFO("lg.y:%f traj.y:%f lg.x:%f traj.x:%f",local_goal_.point.y,traj.back().y,local_goal_.point.x,traj.back().x);
     double target_theta = 0.0;
 
     if(goal_theta > theta)
@@ -192,7 +192,7 @@ std::vector<double> DWA::calc_input()
                 input[1] = yawrate;
                 max_score_index = i;
             }
-            ROS_INFO("i:%d vel:%f yaw:%F score:%d",i,velocity,yawrate,score);
+            // ROS_INFO("i:%d vel:%f yaw:%F score:%d",i,velocity,yawrate,score);
             i++;
         }
     }
