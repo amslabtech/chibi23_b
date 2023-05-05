@@ -313,7 +313,7 @@ int Localizer::get_map_occupancy(double x, double y)
 //正規分布を用いて重みを決める関数
 double Localizer::likelihood(double x, double mu, double dev)
 {
-    double ans = exp(-pow(x-mu, 2)/(2*dev*dev)); // / ( sqrt( 2.0 * M_PI ) * dev );
+    double ans = exp(-pow(x-mu, 2)/(2*dev*dev));  // / ( sqrt( 2.0 * M_PI ) * dev );
 
     return ans;
 }

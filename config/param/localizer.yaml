@@ -17,8 +17,8 @@ laser_ignore_range: 0.20       # 参照から除外するレーザの距離 (m)
 laser_distance_dev: 0.03       # レーザ 1m に対する距離のばらつき (m)
 alpha_th: 0.1                  # 膨張リセットを発動する全体尤度の閾値
 expansion_limit: 5             # 膨張リセットの連続回数上限
-expansion_reset_x_dev: 0.015     # 膨張リセット時のばらつき
-expansion_reset_y_dev: 0.015     # 膨張リセット時のばらつき
+expansion_reset_x_dev: 0.020     # 膨張リセット時のばらつき
+expansion_reset_y_dev: 0.020     # 膨張リセット時のばらつき
 expansion_reset_yaw_dev: 0.015   # 膨張リセット時のばらつき
 alpha_slow_th: 0.001           # リサンプリングリセットを発動する閾値
 alpha_fast_th: 0.1             # slow, fast の差が小さいほど発動しやすい
