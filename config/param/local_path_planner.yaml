@@ -1,17 +1,20 @@
 hz: 10
-goal_tolerance: 0.5
+goal_tolerance: 0.3
 max_vel: 0.25
 min_vel: 0.0
-max_yawrate: 0.9
-max_accel: 1000.0
+max_yawrate: 1.0
+max_accel: 1.0
 max_dyawrate: 1.0
 dt: 0.1
 predict_time: 4.0
-weight_heading: 0.9
-weight_distance: 1.4
-weight_velocity: 1.0
+# weight_heading: 0.9
+weight_heading: 1.2
+# weight_distance: 1.6
+weight_distance: 0.8
+# weight_velocity: 1.1
+weight_velocity: 0.8
 search_range: 1.0
 roomba_radius: 0.2
-radius_margin: 0.05
+radius_margin: 0.1
 vel_reso: 0.05
 yawrate_reso: 0.1

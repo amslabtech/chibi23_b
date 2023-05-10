@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- config file path  -->
+    <arg name="rviz_settings" default="$(find chibi23_b)/config/rviz/obstacle_detector.rviz"/>
+    <arg name="map_settings" default="$(find chibi23_b)/map/map.yaml"/>
+    <arg name="obstacle_detector_settings" default="$(find chibi23_b)/config/param/obstacle_detector.yaml"/>
+
+   <!-- static tf -->
+    <!-- <node pkg="tf_ros" type="static_transform_publisher" name="static_transform_publisher" args="0 0 0 0 0 0 1 /base_link /map"/> -->
+
+    <!-- LiDAR -->
+   <node pkg="urg_node" type="urg_node" name="urg_node" args="_serial_port:=/dev/ttyACM0"/>
+
+    <!-- node launch -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_settings)"/>
+    <node pkg="chibi23_b" type="obstacle_detector" name="obstacle_detector" output="screen">
+        <rosparam command="load" file="$(arg obstacle_detector_settings)"/>
+    </node>
+    <node pkg="map_server" type="map_server" name="map_server" args="$(arg map_settings)" output-"screen"/>
+</launch>

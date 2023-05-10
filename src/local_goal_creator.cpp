@@ -52,6 +52,7 @@ void LocalGoalCreator::make_local_goal()
             goal_index_ = global_path_.poses.size() -1;
             local_goal_.point.x = global_path_.poses[goal_index_].pose.position.x;
             local_goal_.point.y = global_path_.poses[goal_index_].pose.position.y;
+            ROS_INFO("goal_x:%f goal_y:%f", local_goal_.point.x, local_goal_.point.y);
         }
     }
 }

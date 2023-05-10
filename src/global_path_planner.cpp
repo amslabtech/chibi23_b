@@ -39,7 +39,7 @@ void Astar::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& msg)  //マッ
 void Astar::obs_expander()
 {
     ROS_INFO("obs_expander is runnning...");
-    sleep(1);
+    sleep(2);
     new_map_ = map_;
     int grid_size = new_map_.data.size();
     for(int i=0;i<grid_size;i++)
